@@ -11,7 +11,6 @@ import 'package:ohgithublost/domain/ai/ai_models.dart';
 import 'package:ohgithublost/domain/ai/ai_service.dart';
 import 'package:ohgithublost/domain/gh/gh_auth.dart';
 import 'package:ohgithublost/domain/gh/gh_client.dart';
-import 'package:ohgithublost/domain/gh/gh_models.dart';
 import 'package:ohgithublost/kernel/contract/disk_store.dart';
 
 void main() {
