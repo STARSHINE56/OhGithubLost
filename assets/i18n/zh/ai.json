@@ -204,5 +204,6 @@
   "toolMode_chat": "普通聊天",
   "connectionFailed": "连接失败或超时，请检查网络后重试",
   "serverUnavailable": "服务暂时不可用，已有限重试，请稍后再试",
-  "contextFilesTask": "请先读取以下仓库文件作为上下文："
+  "contextFilesTask": "请先读取以下仓库文件作为上下文：",
+  "confirmDeletion": "单独确认删除以下文件"
 }

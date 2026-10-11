@@ -741,169 +741,192 @@ class _AiChatPageState extends State<AiChatPage> {
                         alignment: Alignment.topCenter,
                         child: ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 900),
-                            child: Column(children: [
-                              if (_chat?.repo.isNotEmpty == true)
-                                ListTile(
-                                    dense: true,
-                                    leading: const Icon(Icons.folder_outlined,
-                                        size: 18),
-                                    title: Text(
-                                        '${_chat!.repo} · ${_chat!.branch}',
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis),
-                                    onTap: _sending ? null : _repository),
-                              Expanded(
-                                  child: _loading
-                                      ? const Center(
-                                          child: CircularProgressIndicator())
-                                      : _chat?.messages.isEmpty != false
-                                          ? _welcome()
-                                          : ListView.builder(
-                                              controller: _scroll,
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 16,
-                                                      vertical: 12),
-                                              keyboardDismissBehavior:
-                                                  ScrollViewKeyboardDismissBehavior
-                                                      .onDrag,
-                                              itemCount:
-                                                  _chat!.messages.length +
-                                                      (_sending ? 1 : 0),
-                                              itemBuilder: (context, index) {
-                                                if (index ==
-                                                    _chat!.messages.length) {
-                                                  return ValueListenableBuilder<
-                                                          String>(
-                                                      valueListenable: _stream,
-                                                      builder: (context, text,
-                                                              child) =>
-                                                          Padding(
-                                                              padding:
-                                                                  const EdgeInsets
-                                                                      .all(14),
-                                                              child: text.isEmpty
-                                                                  ? Text(aiText(
-                                                                      'working'))
-                                                                  : AiMarkdown(
-                                                                      text:
-                                                                          text,
-                                                                      fontSize:
-                                                                          _settings
-                                                                              .fontSize)));
-                                                }
-                                                return _message(
-                                                    _chat!.messages[index],
-                                                    index);
-                                              })),
-                              if (_error != null)
+                            child:
+                                LayoutBuilder(builder: (context, constraints) {
+                              final compact = constraints.maxHeight < 260;
+                              final tiny = constraints.maxHeight < 160;
+                              final inputLines = (constraints.maxHeight *
+                                      .4 /
+                                      (MediaQuery.textScalerOf(context)
+                                              .scale(_settings.fontSize) *
+                                          1.5))
+                                  .floor()
+                                  .clamp(1, 6);
+                              return Column(children: [
+                                if (!compact && _chat?.repo.isNotEmpty == true)
+                                  ListTile(
+                                      dense: true,
+                                      leading: const Icon(Icons.folder_outlined,
+                                          size: 18),
+                                      title: Text(
+                                          '${_chat!.repo} · ${_chat!.branch}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis),
+                                      onTap: _sending ? null : _repository),
+                                Expanded(
+                                    child: _loading
+                                        ? const Center(
+                                            child: CircularProgressIndicator())
+                                        : _chat?.messages.isEmpty != false
+                                            ? _welcome()
+                                            : ListView.builder(
+                                                controller: _scroll,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                        horizontal: 16,
+                                                        vertical: 12),
+                                                keyboardDismissBehavior:
+                                                    ScrollViewKeyboardDismissBehavior
+                                                        .onDrag,
+                                                itemCount:
+                                                    _chat!.messages.length +
+                                                        (_sending ? 1 : 0),
+                                                itemBuilder: (context, index) {
+                                                  if (index ==
+                                                      _chat!.messages.length) {
+                                                    return ValueListenableBuilder<
+                                                            String>(
+                                                        valueListenable:
+                                                            _stream,
+                                                        builder: (context, text, child) => Padding(
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .all(14),
+                                                            child: text.isEmpty
+                                                                ? Text(aiText(
+                                                                    'working'))
+                                                                : AiMarkdown(
+                                                                    text: text,
+                                                                    fontSize:
+                                                                        _settings
+                                                                            .fontSize)));
+                                                  }
+                                                  return _message(
+                                                      _chat!.messages[index],
+                                                      index);
+                                                })),
+                                if (_error != null)
+                                  Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16),
+                                      child: Row(children: [
+                                        Expanded(
+                                            child: Text(_error!,
+                                                maxLines: compact ? 1 : 3,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .error))),
+                                        TextButton(
+                                            onPressed: _configure,
+                                            child: Text(aiText('settings')))
+                                      ])),
+                                if (!compact && _chat?.usage.isNotEmpty == true)
+                                  Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16),
+                                      child: Text(
+                                          '${aiText(_chat!.usage['lastEstimated'] == true ? 'estimated' : 'usage')}: ${_chat!.usage['lastInput']} / ${_chat!.usage['lastOutput']} · ${aiText('total')}: ${_chat!.usage['input']} / ${_chat!.usage['output']}',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelSmall,
+                                          maxLines: 2)),
                                 Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16),
-                                    child: Row(children: [
-                                      Expanded(
-                                          child: Text(_error!,
-                                              maxLines: 3,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .error))),
-                                      TextButton(
-                                          onPressed: _configure,
-                                          child: Text(aiText('settings')))
-                                    ])),
-                              if (_chat?.usage.isNotEmpty == true)
-                                Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16),
-                                    child: Text(
-                                        '${aiText(_chat!.usage['lastEstimated'] == true ? 'estimated' : 'usage')}: ${_chat!.usage['lastInput']} / ${_chat!.usage['lastOutput']} · ${aiText('total')}: ${_chat!.usage['input']} / ${_chat!.usage['output']}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelSmall,
-                                        maxLines: 2)),
-                              Padding(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(12, 8, 12, 10),
-                                  child: Container(
-                                      decoration: BoxDecoration(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .surfaceContainer,
-                                          borderRadius:
-                                              BorderRadius.circular(28)),
-                                      padding: const EdgeInsets.fromLTRB(
-                                          14, 8, 8, 8),
-                                      child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            CallbackShortcuts(
-                                                bindings: {
-                                                  const SingleActivator(
-                                                      LogicalKeyboardKey.enter,
-                                                      control:
-                                                          true): () =>
-                                                      unawaited(_send())
-                                                },
-                                                child: TextField(
-                                                    key: const ValueKey(
-                                                        'ai-input'),
-                                                    controller: _input,
-                                                    focusNode: _focus,
-                                                    minLines: 1,
-                                                    maxLines: 6,
-                                                    scrollPadding:
-                                                        const EdgeInsets.all(
-                                                            20),
-                                                    style: TextStyle(
-                                                        fontSize:
-                                                            _settings.fontSize,
-                                                        height: 1.5),
-                                                    decoration: InputDecoration(
-                                                        hintText:
-                                                            aiText('inputHint'),
-                                                        border:
-                                                            InputBorder.none),
-                                                    enabled: !_loading)),
-                                            Row(children: [
-                                              IconButton(
-                                                  tooltip: aiText('context'),
-                                                  icon: const Icon(Icons.add),
-                                                  onPressed: _sending
-                                                      ? null
-                                                      : _addContext),
-                                              IconButton(
-                                                  tooltip: aiText('repository'),
-                                                  icon: const Icon(
-                                                      Icons.folder_outlined),
-                                                  onPressed: _sending
-                                                      ? null
-                                                      : _repository),
-                                              IconButton(
-                                                  tooltip: aiText('toolMode'),
-                                                  icon: const Icon(
-                                                      Icons.build_outlined),
-                                                  onPressed: _sending
-                                                      ? null
-                                                      : _toolMode),
-                                              const Spacer(),
-                                              IconButton.filled(
-                                                  tooltip: aiText(_sending
-                                                      ? 'stop'
-                                                      : 'send'),
-                                                  onPressed: _loading
-                                                      ? null
-                                                      : _sending
-                                                          ? () =>
-                                                              _cancel?.cancel()
-                                                          : _send,
-                                                  icon: Icon(_sending
-                                                      ? Icons.stop
-                                                      : Icons.arrow_upward))
-                                            ]),
-                                          ]))),
-                            ])))))
+                                    padding: const EdgeInsets.fromLTRB(
+                                        12, 8, 12, 10),
+                                    child: Container(
+                                        decoration: BoxDecoration(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .surfaceContainer,
+                                            borderRadius:
+                                                BorderRadius.circular(28)),
+                                        padding: const EdgeInsets.fromLTRB(
+                                            14, 8, 8, 8),
+                                        child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              CallbackShortcuts(
+                                                  bindings: {
+                                                    const SingleActivator(
+                                                            LogicalKeyboardKey
+                                                                .enter,
+                                                            control: true):
+                                                        () => unawaited(_send())
+                                                  },
+                                                  child: TextField(
+                                                      key: const ValueKey(
+                                                          'ai-input'),
+                                                      controller: _input,
+                                                      focusNode: _focus,
+                                                      minLines: 1,
+                                                      maxLines: inputLines,
+                                                      scrollPadding:
+                                                          const EdgeInsets.all(
+                                                              20),
+                                                      style: TextStyle(
+                                                          fontSize: _settings
+                                                              .fontSize,
+                                                          height: 1.5),
+                                                      decoration: InputDecoration(
+                                                          hintText: aiText('inputHint'),
+                                                          suffixIcon: tiny
+                                                              ? IconButton.filled(
+                                                                  tooltip: aiText(_sending ? 'stop' : 'send'),
+                                                                  onPressed: _loading
+                                                                      ? null
+                                                                      : _sending
+                                                                          ? () => _cancel?.cancel()
+                                                                          : _send,
+                                                                  icon: Icon(_sending ? Icons.stop : Icons.arrow_upward))
+                                                              : null,
+                                                          border: InputBorder.none),
+                                                      enabled: !_loading)),
+                                              if (!tiny)
+                                                Row(children: [
+                                                  IconButton(
+                                                      tooltip:
+                                                          aiText('context'),
+                                                      icon:
+                                                          const Icon(Icons.add),
+                                                      onPressed: _sending
+                                                          ? null
+                                                          : _addContext),
+                                                  IconButton(
+                                                      tooltip:
+                                                          aiText('repository'),
+                                                      icon: const Icon(Icons
+                                                          .folder_outlined),
+                                                      onPressed: _sending
+                                                          ? null
+                                                          : _repository),
+                                                  IconButton(
+                                                      tooltip:
+                                                          aiText('toolMode'),
+                                                      icon: const Icon(
+                                                          Icons.build_outlined),
+                                                      onPressed: _sending
+                                                          ? null
+                                                          : _toolMode),
+                                                  const Spacer(),
+                                                  IconButton.filled(
+                                                      tooltip: aiText(_sending
+                                                          ? 'stop'
+                                                          : 'send'),
+                                                      onPressed: _loading
+                                                          ? null
+                                                          : _sending
+                                                              ? () => _cancel
+                                                                  ?.cancel()
+                                                              : _send,
+                                                      icon: Icon(_sending
+                                                          ? Icons.stop
+                                                          : Icons.arrow_upward))
+                                                ]),
+                                            ]))),
+                              ]);
+                            })))))
           ],
         ));
   }

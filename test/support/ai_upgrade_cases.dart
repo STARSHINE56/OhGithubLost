@@ -4,6 +4,7 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import '../../lib/domain/ai/ai_context.dart';
 import '../../lib/domain/ai/ai_models.dart';
 import '../../lib/domain/ai/ai_service.dart';
@@ -11,6 +12,136 @@ import '../../lib/kernel/contract/disk_store.dart';
 import 'ai_safety_cases.dart' show require, rejects;
 
 Map<String, Future<void> Function()> aiUpgradeCases() => {
+      'File ranges use immutable SHA and preserve total line counts': () async {
+        final content = List.generate(1000, (i) => '源码行 ${i + 1}').join('\n');
+        var reads = 0;
+        final ai = AiService(
+            store: InMemoryKv(),
+            vault: InMemoryVault(),
+            account: () async => 'alice',
+            provider: (_, endpoint, key, body) async => {},
+            github: (method, path, body, query) async {
+              if (path.contains('/git/ref/')) {
+                return {
+                  'object': {'sha': '0123456789012345678901234567890123456789'}
+                };
+              }
+              require(
+                  query['ref'] == '0123456789012345678901234567890123456789',
+                  'Mutable branch read');
+              reads++;
+              return {
+                'type': 'file',
+                'encoding': 'base64',
+                'size': utf8.encode(content).length,
+                'sha': 'blob',
+                'content': base64Encode(utf8.encode(content))
+              };
+            });
+        await ai.saveSettings(const AiSettings(optimization: 'economy'));
+        final chat =
+            await ai.newConversation(repo: 'alice/repo', branch: 'main');
+        final first =
+            await ai.readTool(chat, 'read_file', {'path': 'file.dart'}) as Map;
+        require(
+            first['end_line'] == 80 &&
+                first['total_lines'] == 1000 &&
+                first['complete'] == false,
+            'Source range not explicit');
+        final second = await ai.readTool(chat, 'read_file',
+            {'path': 'file.dart', 'start_line': 81, 'end_line': 100}) as Map;
+        require(
+            '${second['content']}'.startsWith('源码行 81'), 'Wrong continuation');
+        require(reads == 1, 'Unchanged file content not cached');
+        final full = await ai.readTool(
+            chat, 'read_file', {'path': 'file.dart', 'full': true}) as Map;
+        require(full['content'] == content && full['complete'] == true,
+            'Full source not available');
+      },
+      'Provider retries only once for transient errors': () async {
+        var attempts = 0;
+        final ai = AiService(
+            store: InMemoryKv(),
+            vault: InMemoryVault(),
+            account: () async => 'alice',
+            github: (_, path, body, query) async => {},
+            provider: (_, endpoint, key, body) async {
+              attempts++;
+              throw const HttpException('AI HTTP 503');
+            });
+        await ai.saveSettings(const AiSettings(enabled: true, model: 'manual'),
+            key: 'KEY');
+        final chat = await ai.newConversation();
+        await rejects(() => ai.send(chat, 'hello', (_) async => false),
+            'serverUnavailable');
+        require(attempts == 2, 'Unbounded retries');
+      },
+      'Explicit model discovery is cached and structured support is probed independently':
+          () async {
+        var discoveries = 0, jsonProbes = 0;
+        final ai = AiService(
+            store: InMemoryKv(),
+            vault: InMemoryVault(),
+            account: () async => 'alice',
+            github: (_, path, body, query) async => {},
+            provider: (config, endpoint, key, body) async {
+              if (endpoint == 'models') {
+                discoveries++;
+                return {
+                  'data': [
+                    {'id': 'custom-model'}
+                  ]
+                };
+              }
+              if (config.structured) {
+                jsonProbes++;
+              }
+              return {
+                'choices': [
+                  {
+                    'message': {
+                      'role': 'assistant',
+                      'content': '{"ok":true}',
+                      if ((body!['tools'] as List? ?? []).any(
+                          (e) => (e as Map)['function']['name'] == 'ogl_probe'))
+                        'tool_calls': [
+                          {
+                            'id': 'probe',
+                            'function': {'name': 'ogl_probe', 'arguments': '{}'}
+                          }
+                        ]
+                    }
+                  }
+                ]
+              };
+            });
+        const config =
+            AiSettings(enabled: true, model: 'custom-model', structured: true);
+        await ai.saveSettings(config, key: 'KEY');
+        await ai.detectModels();
+        require((await ai.cachedModels(config)).single == 'custom-model',
+            'Model list not persisted');
+        final caps = await ai.detectCapabilities(config);
+        require(
+            caps['text'] == true &&
+                caps['tools'] == true &&
+                caps['structured'] == true,
+            'Incorrect capability detection');
+        require(jsonProbes == 1 && discoveries == 1,
+            'Repeated discovery or structured parameters on ordinary probes');
+        await ai.send(await ai.newConversation(), 'hello', (_) async => false);
+        require(discoveries == 1, 'Chat rediscovered models');
+      },
+      'Disabled automatic optimization preserves full ordinary history':
+          () async {
+        final chat = AiConversation(id: '1', accountId: 'alice');
+        chat.messages
+            .addAll(List.generate(100, (i) => AiMessage('user', 'message $i')));
+        require(
+            AiContext.history(chat, const AiSettings(optimize: false)).length ==
+                100,
+            'Optimization ignored the disabled setting');
+      },
       'Account tools work without a repository and use current authorization':
           () async {
         var account = 'alice', requests = 0;

@@ -204,5 +204,6 @@
   "toolMode_chat": "Text chat",
   "connectionFailed": "Connection failed or timed out; check your network and retry",
   "serverUnavailable": "Service temporarily unavailable; retry later",
-  "contextFilesTask": "Read these repository files as context first:"
+  "contextFilesTask": "Read these repository files as context first:",
+  "confirmDeletion": "Отдельно подтвердите удаление файлов"
 }

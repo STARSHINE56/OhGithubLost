@@ -23,6 +23,7 @@ import 'package:ohgithublost/kernel/contract/disk_store.dart';
 import 'package:ohgithublost/surface/app/keyboard_guard.dart';
 import 'package:ohgithublost/surface/i18n/og_l_i18n.dart';
 import 'package:ohgithublost/surface/pages/ai_chat_page.dart';
+import 'package:ohgithublost/surface/pages/ai_confirmation.dart';
 import 'package:ohgithublost/surface/pages/ai_settings_page.dart';
 import 'package:ohgithublost/surface/settings.dart';
 import 'package:ohgithublost/surface/surface_bridge.dart';
@@ -115,6 +116,69 @@ void main() {
         .pumpWidget(MaterialApp(home: AiSettingsPage(surface: surface)));
     await tester.pumpAndSettle();
     expect(find.text(aiText('manualModel')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+      'Landscape keyboard constrains multiline input at large font scale',
+      (tester) async {
+    tester.view.physicalSize = const Size(844, 390);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetViewInsets);
+    final surface = await bridge();
+    await tester.pumpWidget(MaterialApp(
+        builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(1.6)),
+            child: OgLKeyboardGuard(child: child!)),
+        home: AiChatPage(
+            surface: surface, repo: 'alice/project', branch: 'dev')));
+    await tester.pumpAndSettle();
+    expect(find.text('alice/project · dev'), findsOneWidget);
+    final input = find.byKey(const ValueKey('ai-input'));
+    await tester.tap(input);
+    await tester.enterText(input, List.filled(10, '中文草稿').join('\n'));
+    tester.view.viewInsets = const FakeViewPadding(bottom: 200);
+    await tester.pumpAndSettle();
+    expect(tester.getRect(input).bottom, lessThanOrEqualTo(190));
+    expect(tester.takeException(), isNull);
+    final field = tester.widget<TextField>(input);
+    expect(field.controller!.text.split('\n').length, 10);
+  });
+  testWidgets('Deleting files requires a second explicit confirmation',
+      (tester) async {
+    var accepted = false;
+    await tester.pumpWidget(MaterialApp(
+        home: Builder(
+            builder: (context) => Scaffold(
+                body: TextButton(
+                    onPressed: () async {
+                      accepted = await confirmAiProposal(
+                          context,
+                          AiProposal(
+                              operation: 'commit_files',
+                              accountId: 'alice',
+                              repo: 'alice/repo',
+                              branch: 'main',
+                              payload: {},
+                              files: const [
+                                AiFileChange(
+                                    path: 'old.dart',
+                                    before: 'old',
+                                    after: null)
+                              ]));
+                    },
+                    child: const Text('preview'))))));
+    await tester.tap(find.text('preview'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(aiText('confirm')));
+    await tester.pumpAndSettle();
+    expect(accepted, false);
+    expect(find.text(aiText('confirmDeletion')), findsOneWidget);
+    await tester.tap(find.text(aiText('cancel')));
+    await tester.pumpAndSettle();
+    expect(accepted, false);
     expect(tester.takeException(), isNull);
   });
   testWidgets('Chinese Markdown tables and code use the existing renderer',

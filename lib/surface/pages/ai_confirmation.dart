@@ -13,7 +13,7 @@ Future<bool> confirmAiProposal(
   if (!context.mounted) {
     return false;
   }
-  return await showDialog<bool>(
+  final accepted = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
@@ -64,5 +64,29 @@ Future<bool> confirmAiProposal(
           ],
         ),
       ) ??
+      false;
+  if (!accepted || !context.mounted) {
+    return false;
+  }
+  final deleted = proposal.files.where((file) => file.after == null).toList();
+  if (deleted.isEmpty) {
+    return true;
+  }
+  return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+                title: Text(aiText('confirmDeletion')),
+                content: SingleChildScrollView(
+                    child: Text(deleted.map((file) => file.path).join('\n'))),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: Text(aiText('cancel'))),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: Text(aiText('confirm'))),
+                ],
+              )) ??
       false;
 }

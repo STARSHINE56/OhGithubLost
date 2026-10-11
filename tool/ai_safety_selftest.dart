@@ -2,8 +2,8 @@
 library;
 
 import '../test/support/ai_safety_cases.dart';
-import '../test/support/ai_upgrade_cases.dart';
 import '../test/support/ai_stream_cases.dart';
+import '../test/support/ai_upgrade_cases.dart';
 
 Future<void> main() async {
   var passed = 0;
