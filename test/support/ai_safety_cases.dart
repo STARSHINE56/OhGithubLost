@@ -146,6 +146,28 @@ Future<AiProposal> proposal(AiService ai) => ai.prepareFiles(chat(), [
 ], 'Update files');
 
 Map<String, Future<void> Function()> aiSafetyCases() => {
+  'Rollback of a prior-account audit record refuses before confirmation':
+      () async {
+        final gh = FakeGithub();
+        final ai = service(gh);
+        await ai.executeProposal(await proposal(ai), (_) async => true);
+        final entry = (await ai.audit()).firstWhere(
+          (e) => e['restoreTree'] is String,
+        );
+        final writes = gh.writes.length;
+        gh.user = 'bob';
+        var confirmed = false;
+        await rejects(() async {
+          await ai.rollback(entry, (_) async {
+            confirmed = true;
+            return true;
+          });
+        }, 'accountChanged');
+        require(
+          !confirmed && gh.writes.length == writes,
+          'Old account rollback used new token',
+        );
+      },
   'Cancellation ends a multi-tool turn without executing remaining writes':
       () async {
         final gh = FakeGithub();

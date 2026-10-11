@@ -148,6 +148,7 @@ class AiService {
     final list = await conversations();
     list.removeWhere((e) => e.id == chat.id);
     list.insert(0, chat);
+    await _checkAccount(chat.accountId);
     await _vault.writeSecret(
       'ai.chats.${chat.accountId}',
       jsonEncode(list.take(50).map((e) => e.toJson()).toList()),
@@ -158,6 +159,7 @@ class AiService {
     final user = await _account();
     final list = await conversations();
     list.removeWhere((e) => e.id == id);
+    await _checkAccount(user);
     await _vault.writeSecret(
       'ai.chats.$user',
       jsonEncode(list.map((e) => e.toJson()).toList()),
@@ -176,7 +178,11 @@ class AiService {
   Future<void> _record(String id, Map<String, dynamic> entry) async {
     final raw = await _vault.readSecret('ai.audit.$id');
     final entries = raw == null ? <Object?>[] : jsonDecode(raw) as List;
-    entries.insert(0, {'at': DateTime.now().toIso8601String(), ...entry});
+    entries.insert(0, {
+      'at': DateTime.now().toIso8601String(),
+      ...entry,
+      'accountId': id,
+    });
     await _vault.writeSecret(
       'ai.audit.$id',
       jsonEncode(entries.take(500).toList()),
@@ -825,6 +831,10 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
     AiConfirmation confirm,
   ) async {
     final user = await _account();
+    // 撤销记录属于原账号；切号后不能使用新账号的 token 执行旧记录。
+    if (entry['accountId'] != user) {
+      throw const AiException('accountChanged');
+    }
     if (entry['restoreTree'] is String && entry['commit'] is String) {
       return executeProposal(
         AiProposal(
