@@ -146,11 +146,13 @@ class AiProposal {
     required this.repo,
     required this.branch,
     required this.payload,
+    this.conversationId = '',
     this.baseSha = '',
     this.baseTree = '',
     List<AiFileChange> files = const [],
   }) : files = List.unmodifiable(files),
        payloadJson = jsonEncode(payload);
+  final String conversationId;
   final String operation;
   final String accountId;
   final String repo;

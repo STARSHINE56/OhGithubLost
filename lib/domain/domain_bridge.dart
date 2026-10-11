@@ -415,12 +415,12 @@ class DomainLayerModule extends OgLModule {
     // 两条通道分别注入：AI 密钥不经 GitHub 请求或镜像传输。
     final client = context.di.resolve<GhClient>();
     final base = BaseBridge.of(context.bridges);
-    final AiGithubRequest githubRequest = (method, path, body, query) async {
+    Future<Object?> githubRequest(String method, String path, Map<String, Object?>? body, Map<String, String> query) async {
       final response = await client.send(GhRequest(path: path,
         method: NetMethod.values.firstWhere((e) => e.verb == method),
         body: body, query: query, cacheBypass: true));
       return response.body.trim().isEmpty ? <String, Object?>{} : jsonDecode(response.body);
-    };
+    }
     final provider = AiProvider(AiHttpTransport().send);
     final bridge = DomainBridge(
       ai: AiService(store: base.disk.kv, vault: base.disk.vault,

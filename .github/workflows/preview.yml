@@ -1,0 +1,64 @@
+# fork 开发包使用 debug 模式，不依赖原作者的发布私钥。
+# 不生成 Release，也不改变 release 启动签名校验。
+name: Preview builds
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: preview-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  preview:
+    if: github.repository != 'yingo-server/OhGithubLost'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: android
+            target: apk
+            os: ubuntu-latest
+            artifact: build/app/outputs/flutter-apk/app-debug.apk
+          - platform: windows
+            target: windows
+            os: windows-latest
+            artifact: build/windows/x64/runner/Debug/**
+          - platform: linux
+            target: linux
+            os: ubuntu-22.04
+            artifact: build/linux/x64/debug/bundle/**
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: 安装 Linux 桌面依赖
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libsecret-1-dev liblzma-dev libstdc++-12-dev libglu1-mesa
+      - name: 生成平台并注入规格
+        shell: bash
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          flutter create --platforms=${{ matrix.platform }} --org com.yingo --project-name ohgithublost .
+          rm -f test/widget_test.dart
+          OGL_PY=python3
+          command -v python3 >/dev/null 2>&1 || OGL_PY=python
+          "$OGL_PY" tool/inject_platform_spec.py --target ${{ matrix.platform }}
+          flutter pub get
+      - name: 编译开发包
+        run: flutter build ${{ matrix.target }} --debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OGL-preview-${{ matrix.platform }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error
+          retention-days: 14

@@ -183,49 +183,58 @@ class _OgLClientShellState extends State<OgLClientShell>
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                 ),
-                for (final tab in OgLShellTab.values)
-                  ListTile(
-                    selected: tab == _tab,
-                    leading: Icon(switch (tab) {
-                      OgLShellTab.home => Icons.folder_outlined,
-                      OgLShellTab.search => Icons.search,
-                      OgLShellTab.profile => Icons.person_outline,
-                      OgLShellTab.settings => Icons.settings_outlined,
-                    }),
-                    title: Text(OgLI18n.instance.t('shell', tab.name)),
-                    onTap: () {
-                      _scaffoldKey.currentState?.closeDrawer();
-                      _select(tab);
-                    },
+                Expanded(
+                  child: ListView(
+                    children: [
+                      for (final tab in OgLShellTab.values)
+                        ListTile(
+                          selected: tab == _tab,
+                          leading: Icon(switch (tab) {
+                            OgLShellTab.home => Icons.folder_outlined,
+                            OgLShellTab.search => Icons.search,
+                            OgLShellTab.profile => Icons.person_outline,
+                            OgLShellTab.settings => Icons.settings_outlined,
+                          }),
+                          title: Text(OgLI18n.instance.t('shell', tab.name)),
+                          onTap: () {
+                            _scaffoldKey.currentState?.closeDrawer();
+                            _select(tab);
+                          },
+                        ),
+                      const Divider(),
+                      ListTile(
+                        leading: const Icon(Icons.notifications_outlined),
+                        title: Text(aiText('notifications')),
+                        onTap: () {
+                          _scaffoldKey.currentState?.closeDrawer();
+                          _openFeature(
+                            GithubNotificationsPage(surface: widget.surface),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.label_outline),
+                        title: Text(aiText('stars')),
+                        onTap: () {
+                          _scaffoldKey.currentState?.closeDrawer();
+                          _openFeature(
+                            StarManagerPage(surface: widget.surface),
+                          );
+                        },
+                      ),
+                      ListTile(
+                        leading: const Icon(Icons.bar_chart),
+                        title: Text(aiText('contributions')),
+                        onTap: () {
+                          _scaffoldKey.currentState?.closeDrawer();
+                          _openFeature(
+                            ContributionsPage(surface: widget.surface),
+                          );
+                        },
+                      ),
+                    ],
                   ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.notifications_outlined),
-                  title: Text(aiText('notifications')),
-                  onTap: () {
-                    _scaffoldKey.currentState?.closeDrawer();
-                    _openFeature(
-                      GithubNotificationsPage(surface: widget.surface),
-                    );
-                  },
                 ),
-                ListTile(
-                  leading: const Icon(Icons.label_outline),
-                  title: Text(aiText('stars')),
-                  onTap: () {
-                    _scaffoldKey.currentState?.closeDrawer();
-                    _openFeature(StarManagerPage(surface: widget.surface));
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.bar_chart),
-                  title: Text(aiText('contributions')),
-                  onTap: () {
-                    _scaffoldKey.currentState?.closeDrawer();
-                    _openFeature(ContributionsPage(surface: widget.surface));
-                  },
-                ),
-                const Spacer(),
                 const Divider(),
                 ListTile(
                   leading: const Icon(Icons.auto_awesome_outlined),

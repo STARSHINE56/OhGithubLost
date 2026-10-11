@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 
 import '../surface_bridge.dart';
+import '../types.dart';
 import 'ai_settings_page.dart';
 
 class ContributionsPage extends StatefulWidget {
@@ -33,7 +34,7 @@ class _ContributionsPageState extends State<ContributionsPage> {
     try {
       final account = await widget.surface.domain.auth.activeAccount();
       if (account == null) {
-        throw StateError('Login required');
+        throw const AiException('loginRequired');
       }
       final stats = await widget.surface.monthlyContributions(
         account.login,
@@ -78,7 +79,10 @@ class _ContributionsPageState extends State<ContributionsPage> {
               onPressed:
                   _busy ||
                       _month.isAfter(
-                        DateTime.now().subtract(const Duration(days: 31)),
+                        DateTime(
+                          DateTime.now().year,
+                          DateTime.now().month,
+                        ).subtract(const Duration(microseconds: 1)),
                       )
                   ? null
                   : () => _change(1),

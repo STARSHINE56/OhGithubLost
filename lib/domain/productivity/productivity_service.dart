@@ -40,6 +40,33 @@ class ProductivityService {
     await github('PATCH', '/notifications/threads/$threadId', {}, {});
   }
 
+  /// 通知只允许读取其仓库内的 Issue/PR，不能跟随任意外部 subject URL。
+  Future<Map<String, dynamic>> notificationSubject(
+    String repo,
+    String url,
+  ) async {
+    AiServiceValidation.repo(repo);
+    final uri = Uri.tryParse(url);
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host != 'api.github.com' ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasQuery ||
+        uri.hasFragment ||
+        !RegExp('^/repos/${RegExp.escape(repo)}/(issues|pulls)/[1-9][0-9]*\$')
+            .hasMatch(uri.path)) {
+      throw const AiException('invalidResponse');
+    }
+    final user = await _id();
+    final item = Map<String, dynamic>.from(
+      await github('GET', uri.path, null, {}) as Map,
+    );
+    if (await _id() != user) {
+      throw const AiException('accountChanged');
+    }
+    return item;
+  }
+
   Future<Map<String, dynamic>> starMetadata() async {
     final raw = await _store.read('productivity.stars.${await _id()}');
     return raw == null ? {} : Map<String, dynamic>.from(jsonDecode(raw) as Map);

@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import '../../kernel/contract/disk_store.dart';
 import 'ai_models.dart';
+import 'ai_provider.dart';
 
 /// 账号读取必须实时发生，避免弹窗期间切号造成串号提交。
 class AiService {
@@ -21,7 +22,7 @@ class AiService {
   final AiGithubRequest github;
   final AiProviderRequest provider;
   final Future<String?> Function() account;
-  bool _busy = false;
+  bool _busy = false, _polling = false;
 
   /// 仓库名与路径使用严格校验；禁止模型构造完整 URL 或越界 API 路径。
   static void validateRepo(String repo) {
@@ -76,6 +77,7 @@ class AiService {
     String? key,
     bool clearKey = false,
   }) async {
+    AiProvider.validate(value);
     if (clearKey) {
       await _vault.deleteSecret(value.keyId);
     }
@@ -187,7 +189,7 @@ class AiService {
     String text,
     AiConfirmation confirm,
   ) async {
-    if (_busy) {
+    if (_busy || _polling) {
       throw const AiException('busy');
     }
     _busy = true;
@@ -482,6 +484,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
       case 'update_pull':
         return executeProposal(
           AiProposal(
+            conversationId: chat.id,
             operation: name,
             accountId: chat.accountId,
             repo: chat.repo,
@@ -686,6 +689,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
         ) as Map;
         final runs = workflows['workflow_runs'] as List? ?? [];
         final previous = runs.isEmpty ? 0 : (runs.first as Map)['id'];
+        await _checkAccount(proposal.accountId);
         final created = DateTime.now().toUtc().toIso8601String();
         await github('POST', '$root/actions/workflows/$id/dispatches', {
           'ref': proposal.branch,
@@ -695,6 +699,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
           'repo': proposal.repo,
           'branch': proposal.branch,
           'workflow': id,
+          'conversation': proposal.conversationId,
           'previous': previous,
           'created': created,
         });
@@ -747,6 +752,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
     if ((head['object'] as Map)['sha'] != proposal.baseSha) {
       throw const AiException('headChanged');
     }
+    await _checkAccount(proposal.accountId);
     final commit = await github('POST', '$root/git/commits', {
       'message': message,
       'tree': tree,
@@ -760,6 +766,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
       'branch': proposal.branch,
       'commit': sha,
       'base': proposal.baseSha,
+      'files': proposal.files.map((e) => e.toJson()).toList(),
       'restoreTree': proposal.operation == 'rollback'
           ? null
           : proposal.baseTree,
@@ -776,6 +783,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
       'branch': proposal.branch,
       'commit': sha,
       'base': proposal.baseSha,
+      'files': proposal.files.map((e) => e.toJson()).toList(),
       'restoreTree': proposal.operation == 'rollback'
           ? null
           : proposal.baseTree,
@@ -826,6 +834,17 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
           branch: entry['branch'] as String,
           baseSha: entry['commit'] as String,
           baseTree: entry['restoreTree'] as String,
+          files: (entry['files'] as List? ?? [])
+              .whereType<Map>()
+              .map(
+                (e) => AiFileChange(
+                  path: e['path'] as String,
+                  before: e['after'] as String?,
+                  after: e['before'] as String?,
+                  mode: e['mode'] as String? ?? '100644',
+                ),
+              )
+              .toList(),
           payload: {
             'commit': entry['commit'],
             'restoreTree': entry['restoreTree'],
@@ -857,6 +876,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
     if (after.keys.any((key) => current[key] != after[key])) {
       throw const AiException('headChanged');
     }
+    await _checkAccount(user);
     await github('PATCH', path, Map<String, Object?>.from(before), {});
     await _record(user, {
       'operation': 'restore_item',
@@ -875,9 +895,18 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
 
   /// 主壳定时查询；只有唯一匹配本次触发的运行才自动通知，避免误报他人编译。
   Future<List<Map<String, dynamic>>> pollBuilds() async {
-    if (_busy) {
+    if (_busy || _polling) {
       return [];
     }
+    _polling = true;
+    try {
+      return await _pollBuilds();
+    } finally {
+      _polling = false;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _pollBuilds() async {
     final user = await _account();
     final raw = await _vault.readSecret('ai.runs.$user');
     if (raw == null) {
@@ -937,6 +966,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
         ) as Map;
         completed.add({
           'repo': tracked['repo'],
+          'conversation': tracked['conversation'],
           'run': run,
           'artifacts': artifacts['artifacts'] ?? [],
         });
@@ -944,14 +974,12 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
       }
     }
     await _checkAccount(user);
-    await _vault.writeSecret(
-      'ai.runs.$user',
-      jsonEncode(list.where((e) => e['done'] != true).toList()),
-    );
-    // 编译结束写入所属仓库最近会话，重新打开聊天仍可下载。
+    // 编译结束写回发起操作的会话，避免同一仓库多会话时串消息。
     for (final build in completed) {
       final chats = await conversations();
-      final matching = chats.where((e) => e.repo == build['repo']).toList();
+      final matching = chats
+          .where((e) => e.id == build['conversation'])
+          .toList();
       if (matching.isNotEmpty) {
         final run = build['run'] as Map;
         final artifacts = (build['artifacts'] as List)
@@ -966,15 +994,24 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
             )
             .toList();
         matching.first.messages.add(
+          AiMessage('assistant', '${run['name']} · ${run['conclusion']}'),
+        );
+        matching.first.messages.add(
           AiMessage(
             'assistant',
-            '${run['name']} · ${run['conclusion']}',
+            run['conclusion'] == 'success' ? 'buildReady' : 'buildFailed',
+            notice: true,
             artifacts: artifacts,
           ),
         );
         await saveConversation(matching.first);
       }
     }
+    await _checkAccount(user);
+    await _vault.writeSecret(
+      'ai.runs.$user',
+      jsonEncode(list.where((e) => e['done'] != true).toList()),
+    );
     return completed;
   }
 

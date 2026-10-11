@@ -1,4 +1,6 @@
 /// 不依赖第三方包的安全回归入口，便于受限环境离线验证。
+library;
+
 import '../test/support/ai_safety_cases.dart';
 
 Future<void> main() async {

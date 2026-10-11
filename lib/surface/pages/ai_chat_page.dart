@@ -301,7 +301,7 @@ class _AiChatPageState extends State<AiChatPage> {
                           ? null
                           : () async {
                               await widget.surface.aiDeleteChat(chat.id);
-                              if (mounted) {
+                              if (context.mounted) {
                                 Navigator.pop(context);
                                 await _load(fresh: chat.id == _chat?.id);
                               }
@@ -383,7 +383,7 @@ class _AiChatPageState extends State<AiChatPage> {
                                           ? aiText(message.content)
                                           : message.content,
                                       selectable: true,
-                                      onTapLink: (_, href, _) {
+                                      onTapLink: (text, href, title) {
                                         if (href != null &&
                                             ['https', 'http'].contains(
                                               Uri.tryParse(href)?.scheme,

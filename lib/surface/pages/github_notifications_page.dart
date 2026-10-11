@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import '../surface_bridge.dart';
 import '../util/link_opener.dart';
 import 'ai_settings_page.dart';
+import 'issue_page.dart';
 import 'notifications_page.dart';
+import 'pull_page.dart';
 
 class GithubNotificationsPage extends StatefulWidget {
   const GithubNotificationsPage({required this.surface, super.key});
@@ -77,17 +79,40 @@ class _GithubNotificationsPageState extends State<GithubNotificationsPage> {
     }
   }
 
-  /// GitHub subject.url 是 API 地址；只把验证后的 Issue/PR 路径转成网页地址。
-  String _url(Map<String, dynamic> item) {
+  /// Issue/PR 在应用中查看；其他通知回到 GitHub 对应仓库页。
+  Future<void> _open(Map<String, dynamic> item) async {
     final subject = item['subject'] as Map;
-    final uri = Uri.tryParse(subject['url'] as String? ?? '');
-    if (uri?.host == 'api.github.com' && uri!.path.startsWith('/repos/')) {
-      final path = uri.path
-          .substring('/repos'.length)
-          .replaceFirst('/pulls/', '/pull/');
-      return 'https://github.com$path';
+    final repo = (item['repository'] as Map)['full_name'] as String;
+    try {
+      if (subject['type'] == 'Issue' || subject['type'] == 'PullRequest') {
+        final detail = await widget.surface.githubNotificationSubject(
+          repo,
+          subject['url'] as String,
+        );
+        if (!mounted) {
+          return;
+        }
+        final Widget page = subject['type'] == 'Issue'
+            ? IssuePage(surface: widget.surface, fullName: repo, issue: detail)
+            : PullPage(
+                surface: widget.surface,
+                fullName: repo,
+                pull: detail,
+                number: detail['number'] as int,
+              );
+        await Navigator.of(context)
+            .push(MaterialPageRoute<void>(builder: (_) => page));
+      } else {
+        await openLinkOrCopy(
+          context,
+          'https://github.com/$repo${subject['type'] == 'Release' ? '/releases' : ''}',
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = aiError(e));
+      }
     }
-    return (item['repository'] as Map)['html_url'] as String;
   }
 
   @override
@@ -160,7 +185,7 @@ class _GithubNotificationsPageState extends State<GithubNotificationsPage> {
                         subtitle: Text(
                           '${(item['repository'] as Map)['full_name']}\n${item['reason']} · ${item['updated_at']}',
                         ),
-                        onTap: () => openLinkOrCopy(context, _url(item)),
+                        onTap: () => _open(item),
                         trailing: unread
                             ? IconButton(
                                 tooltip: aiText('markRead'),
