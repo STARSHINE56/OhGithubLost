@@ -105,10 +105,9 @@ class AiContext {
 
         message['content'] = jsonEncode({
           'context_truncated': true,
-          'hint':
-              'Only part of this result fits. Read specific paths or smaller '
-                  'startLine/endLine ranges before modifying files; never treat '
-                  'this as complete source.',
+          'hint': 'Only part of this result fits. Read specific paths or smaller '
+              'start_line/end_line ranges before modifying files; never treat '
+              'this as complete source.',
           'data': shorten(jsonDecode(raw)),
         });
       }

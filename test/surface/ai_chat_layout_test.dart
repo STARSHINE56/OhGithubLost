@@ -443,6 +443,25 @@ void main() {
     expect(tester.takeException(), isNull);
   });
   testWidgets(
+      'Backgrounding settings flushes a key before its debounce expires',
+      (tester) async {
+    final surface = await bridge();
+    await tester
+        .pumpWidget(MaterialApp(home: AiSettingsPage(surface: surface)));
+    await tester.pumpAndSettle();
+    final key = find.widgetWithText(TextField, aiText('apiKey'));
+    await tester.ensureVisible(key);
+    await tester.enterText(key, 'test-background-key');
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    await tester.pump();
+    expect(await surface.aiHasKey(), true);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
       'Landscape keyboard constrains multiline input at large font scale',
       (tester) async {
     tester.view.physicalSize = const Size(844, 390);

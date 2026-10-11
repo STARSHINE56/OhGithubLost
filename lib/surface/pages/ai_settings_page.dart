@@ -36,7 +36,8 @@ class AiSettingsPage extends StatefulWidget {
   State<AiSettingsPage> createState() => _AiSettingsPageState();
 }
 
-class _AiSettingsPageState extends State<AiSettingsPage> {
+class _AiSettingsPageState extends State<AiSettingsPage>
+    with WidgetsBindingObserver {
   final _url = TextEditingController(),
       _key = TextEditingController(),
       _model = TextEditingController();
@@ -66,12 +67,22 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.surface.aiAccountChanges.addListener(_accountChanged);
     unawaited(_refreshLogin());
     _load();
   }
 
   void _accountChanged() => unawaited(_refreshLogin());
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed &&
+        !_loading &&
+        (_saveTimer?.isActive == true || _keyDirty)) {
+      unawaited(_save(silent: true));
+    }
+  }
+
   Future<void> _refreshLogin() async {
     final epoch = ++_loginEpoch;
     try {
@@ -117,6 +128,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     widget.surface.aiAccountChanges.removeListener(_accountChanged);
     if (!_loading && (_saveTimer?.isActive == true || _keyDirty)) {
       unawaited(_save(silent: true));
