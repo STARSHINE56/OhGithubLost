@@ -91,6 +91,7 @@ class OgLI18n extends ChangeNotifier {
 
   /// 需要加载的页面分片（新增页面时在这里补一项即可）。
   static const List<String> pages = <String>[
+    'ai',
     'about_page',
     'action_log_page',
     'action_run_page',

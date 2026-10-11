@@ -16,6 +16,7 @@ import '../i18n/og_l_i18n.dart';
 import '../surface_bridge.dart';
 import '../types.dart';
 import 'download_manager_page.dart';
+import 'github_notifications_page.dart';
 import 'new_repo_page.dart';
 import 'notifications_page.dart';
 import 'repo_page.dart';
@@ -94,7 +95,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   void _openNotifications() {
     Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (BuildContext context) => const NotificationsPage()),
+      MaterialPageRoute<void>(builder: (BuildContext context) => widget.surface.hasAi ? GithubNotificationsPage(surface: widget.surface) : const NotificationsPage()),
     );
   }
 
@@ -121,6 +122,9 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        leading: widget.surface.hasAi ? IconButton(icon: const Icon(Icons.menu),
+          tooltip: OgLI18n.instance.t('ai', 'menu'),
+          onPressed: () => Scaffold.of(context).openDrawer()) : null,
         title:  Text(_t('home')),
         actions: <Widget>[
           ListenableBuilder(

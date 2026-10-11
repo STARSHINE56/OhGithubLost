@@ -36,6 +36,8 @@ import '../util/path_rules.dart';
 import '../widgets/code_editor_field.dart';
 import '../widgets/readme_view.dart';
 import 'action_run_page.dart';
+import 'ai_chat_page.dart';
+import 'ai_settings_page.dart';
 import 'code_editor_page.dart';
 import 'commit_page.dart';
 import 'file_preview_page.dart';
@@ -261,6 +263,48 @@ class _RepoPageState extends State<RepoPage> {
     OgLAppLog.instance.result('仓库', _t('branchSwitched'), next);
   }
 
+  /// 显式订阅，启动时建立基线，不把旧 Release 当成新事件。
+  Future<void> _watch() async {
+    try {
+      final watches = await widget.surface.repoWatches();
+      if (!mounted) {
+        return;
+      }
+      final enabled = watches.containsKey(_full);
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(aiText(enabled ? 'unwatch' : 'watch')),
+          content: Text('$_full\n${aiText('watchScope')}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(aiText('cancel')),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: Text(aiText('confirm')),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) {
+        return;
+      }
+      await widget.surface.watchRepo(_full, !enabled);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(aiText(enabled ? 'unwatched' : 'watched'))),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(aiError(error))));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
@@ -336,6 +380,28 @@ class _RepoPageState extends State<RepoPage> {
             child: Text(_repo.fullName, maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
           actions: <Widget>[
+            if (widget.surface.hasAi)
+              IconButton(
+                tooltip: aiText('title'),
+                icon: const Icon(Icons.auto_awesome_outlined),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => AiChatPage(
+                      surface: widget.surface,
+                      repo: _full,
+                      branch: _branch,
+                    ),
+                  ),
+                ),
+              ),
+            if (widget.surface.hasAi)
+              IconButton(
+                tooltip: aiText('watch'),
+                icon: const Icon(Icons.notifications_active_outlined),
+                onPressed: _watch,
+              ),
+
             IconButton(
               icon: Icon(_starred ? Icons.star : Icons.star_border),
               tooltip: _starred ? _t('unstar') : _t('star'),

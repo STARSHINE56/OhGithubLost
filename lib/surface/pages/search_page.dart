@@ -223,6 +223,7 @@ class _SearchPageState extends State<SearchPage> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _input,
+                    autofocus: true,
                   textInputAction: TextInputAction.search,
                   decoration:  InputDecoration(
                     hintText: _t('queryHint'),

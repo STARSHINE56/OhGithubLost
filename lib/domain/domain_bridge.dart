@@ -10,16 +10,22 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 
 import '../base/base_bridge.dart';
 import '../base/disk/og_l_storage.dart';
+import '../base/net/ai_http_transport.dart';
 import '../base/net/net_bridge.dart';
 import '../base/net/net_transport.dart';
 import '../base/net/range_download.dart';
 import '../kernel/bridge_registry.dart';
 import '../kernel/contract/module.dart';
+import '../kernel/contract/net_types.dart';
 import '../kernel/contract/storage_export.dart';
 import '../kernel/environment.dart';
+import 'ai/ai_models.dart';
+import 'ai/ai_provider.dart';
+import 'ai/ai_service.dart';
 import 'gh/gh_api.dart';
 import 'gh/gh_auth.dart';
 import 'gh/gh_client.dart';
@@ -31,6 +37,7 @@ import 'ix/ix_notify.dart';
 import 'ix/ix_presign.dart';
 import 'ix/ix_session.dart';
 import 'ix/ix_task.dart';
+import 'productivity/productivity_service.dart';
 import 'sys/sys_access.dart';
 import 'sys/sys_info.dart';
 
@@ -50,10 +57,16 @@ class DomainBridge {
     IxActionLogs? actionLogs,
     IxPresign? presign,
     RepoFileService? repoFiles,
+    this.ai,
+    this.productivity,
   })  : downloads = downloads ?? IxDownloadManager(),
         actionLogs = actionLogs ?? IxActionLogs(tokenProvider: () async => null),
         presign = presign ?? IxPresign(tokenProvider: () async => null),
         _repoFiles = repoFiles ?? RepoFileService(api: api);
+
+  /// AI 与体验服务在真实装配时提供；可选参数保持既有测试兼容。
+  final AiService? ai;
+  final ProductivityService? productivity;
 
   /// 认证（多账号 / 令牌）。
   final GhAuthService auth;
@@ -399,7 +412,21 @@ class DomainLayerModule extends OgLModule {
     );
     context.di.register<RepoFileService>(repoFiles);
 
+    // 两条通道分别注入：AI 密钥不经 GitHub 请求或镜像传输。
+    final client = context.di.resolve<GhClient>();
+    final base = BaseBridge.of(context.bridges);
+    final AiGithubRequest githubRequest = (method, path, body, query) async {
+      final response = await client.send(GhRequest(path: path,
+        method: NetMethod.values.firstWhere((e) => e.verb == method),
+        body: body, query: query, cacheBypass: true));
+      return response.body.trim().isEmpty ? <String, Object?>{} : jsonDecode(response.body);
+    };
+    final provider = AiProvider(AiHttpTransport().send);
     final bridge = DomainBridge(
+      ai: AiService(store: base.disk.kv, vault: base.disk.vault,
+        github: githubRequest, provider: provider.request, account: ghAuth.activeAccountId),
+      productivity: ProductivityService(store: base.disk.kv,
+        github: githubRequest, account: ghAuth.activeAccountId),
       auth: ghAuth,
       api: context.di.resolve<GhApi>(),
       client: context.di.resolve<GhClient>(),

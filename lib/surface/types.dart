@@ -36,3 +36,5 @@ export '../domain/ix/ix_task.dart' hide IxTaskRunner;
 /// 内核契约：写冲突异常（HTTP 409 / 422 的结构化形态）。
 /// 页面据此把「冲突」翻译成明确原因（如"同名文件已存在"），而不是原样展示报错。
 export '../kernel/contract/disk_types.dart' show RemoteConflictException;
+/// AI 仅导出数据模型，业务服务经桥调用。
+export '../domain/ai/ai_models.dart';

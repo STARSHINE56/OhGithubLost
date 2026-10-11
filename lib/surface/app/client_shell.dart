@@ -18,17 +18,23 @@ import 'package:flutter/services.dart';
 
 import '../../kernel/kernel.dart';
 import '../i18n/og_l_i18n.dart';
+import '../pages/ai_chat_page.dart';
+import '../pages/ai_settings_page.dart';
+import '../pages/contributions_page.dart';
 import '../pages/dashboard_page.dart';
+import '../pages/github_notifications_page.dart';
 import '../pages/login_page.dart';
 import '../pages/onboarding_page.dart';
 import '../pages/profile_page.dart';
 import '../pages/search_page.dart';
 import '../pages/settings_page.dart';
+import '../pages/star_manager_page.dart';
 import '../surface_bridge.dart';
 import '../types.dart';
 import 'animations.dart';
 import 'back_guard.dart';
 import 'error_surface.dart';
+import 'system_notifier.dart';
 
 /// 壳内的四个页面（导航值）。
 enum OgLShellTab {
@@ -64,8 +70,13 @@ class OgLClientShell extends StatefulWidget {
   State<OgLClientShell> createState() => _OgLClientShellState();
 }
 
-class _OgLClientShellState extends State<OgLClientShell> {
+class _OgLClientShellState extends State<OgLClientShell>
+    with WidgetsBindingObserver {
   OgLShellTab _tab = OgLShellTab.home;
+  Timer? _pollTimer;
+  bool _polling = false;
+  int _pollTick = 0;
+  String? _lastPollError;
   bool _checked = false;
   bool _guest = false;
   String? _accountId;
@@ -83,13 +94,151 @@ class _OgLClientShellState extends State<OgLClientShell> {
     // ★ 认证是全局可观察状态：登录 / 失效 / 切号 / 登出都自动联动。
     widget.surface.domain.auth.addListener(_onAuthChanged);
     _check();
+    if (widget.surface.hasAi) {
+      WidgetsBinding.instance.addObserver(this);
+      _pollTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => unawaited(_pollEvents(updates: _pollTick++ % 10 == 0)),
+      );
+    }
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     widget.surface.domain.auth.removeListener(_onAuthChanged);
     super.dispose();
   }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_pollEvents(updates: true));
+    }
+  }
+
+  /// 运行中检查；应用被系统终止时不承诺实时通知，恢复后补查。
+  Future<void> _pollEvents({bool updates = false}) async {
+    if (_polling || !widget.surface.hasAi || _accountId == null) {
+      return;
+    }
+    _polling = true;
+    try {
+      final builds = await widget.surface.aiPollBuilds();
+      for (final build in builds) {
+        final run = build['run'] as Map;
+        final success = run['conclusion'] == 'success';
+        final text = aiText(success ? 'buildReady' : 'buildFailed');
+        OgLAppLog.instance.add(aiText('title'), '${build['repo']} · $text');
+        await OgLSystemNotifier.instance.show(
+          title: text,
+          body: '${build['repo']}',
+        );
+      }
+      if (updates) {
+        final changes = await widget.surface.pollRepoUpdates();
+        for (final change in changes) {
+          final text = aiText(
+            change['release'] == true ? 'newRelease' : 'newCommit',
+          );
+          OgLAppLog.instance.add(aiText('watch'), '${change['repo']} · $text');
+          await OgLSystemNotifier.instance.show(
+            title: text,
+            body: '${change['repo']}',
+          );
+        }
+      }
+      _lastPollError = null;
+    } catch (error) {
+      final text = aiError(error);
+      if (_lastPollError != text) {
+        _lastPollError = text;
+        OgLAppLog.instance.add(
+          aiText('notifications'),
+          text,
+          severity: OgLNoticeSeverity.warning,
+        );
+      }
+    } finally {
+      _polling = false;
+    }
+  }
+
+  void _openFeature(Widget page) => Navigator.push<void>(
+    context,
+    MaterialPageRoute<void>(builder: (_) => page),
+  );
+
+  /// 保留四个主导航，把扩展能力与 AI 放在抽屉下方。
+  Widget? _drawer() => !widget.surface.hasAi
+      ? null
+      : Drawer(
+          child: SafeArea(
+            child: Column(
+              children: [
+                ListTile(
+                  title: Text(
+                    'OGL',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                ),
+                for (final tab in OgLShellTab.values)
+                  ListTile(
+                    selected: tab == _tab,
+                    leading: Icon(switch (tab) {
+                      OgLShellTab.home => Icons.folder_outlined,
+                      OgLShellTab.search => Icons.search,
+                      OgLShellTab.profile => Icons.person_outline,
+                      OgLShellTab.settings => Icons.settings_outlined,
+                    }),
+                    title: Text(OgLI18n.instance.t('shell', tab.name)),
+                    onTap: () {
+                      _scaffoldKey.currentState?.closeDrawer();
+                      _select(tab);
+                    },
+                  ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.notifications_outlined),
+                  title: Text(aiText('notifications')),
+                  onTap: () {
+                    _scaffoldKey.currentState?.closeDrawer();
+                    _openFeature(
+                      GithubNotificationsPage(surface: widget.surface),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.label_outline),
+                  title: Text(aiText('stars')),
+                  onTap: () {
+                    _scaffoldKey.currentState?.closeDrawer();
+                    _openFeature(StarManagerPage(surface: widget.surface));
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.bar_chart),
+                  title: Text(aiText('contributions')),
+                  onTap: () {
+                    _scaffoldKey.currentState?.closeDrawer();
+                    _openFeature(ContributionsPage(surface: widget.surface));
+                  },
+                ),
+                const Spacer(),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.auto_awesome_outlined),
+                  title: Text(aiText('title')),
+                  onTap: () {
+                    _scaffoldKey.currentState?.closeDrawer();
+                    _openFeature(AiChatPage(surface: widget.surface));
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
 
   void _onAuthChanged() {
     if (mounted) {
@@ -137,7 +286,8 @@ class _OgLClientShellState extends State<OgLClientShell> {
 
   /// 抽屉状态需要它（返回键优先关抽屉，而不是切 tab / 退出）。
   ///
-  /// 注：本应用当前**无抽屉**（[OgLBackAction.closeDrawer] 分支不可达），
+  /// 抽屉扩展入口可用时由 [SurfaceBridge.hasAi] 控制，原导航保持兼容。
+  /// 旧版本**无抽屉**（[OgLBackAction.closeDrawer] 分支不可达），
   /// 该 key 保留，以备将来加入侧边面板。
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -178,7 +328,7 @@ class _OgLClientShellState extends State<OgLClientShell> {
       );
       switch (action) {
         case OgLBackAction.closeDrawer:
-          // 本应用当前无抽屉，此分支不可达；保留以备将来加入侧边面板。
+          // 新扩展抽屉优先响应返回键。
           _scaffoldKey.currentState?.closeDrawer();
         case OgLBackAction.goHome:
           _select(OgLShellTab.home);
@@ -233,7 +383,38 @@ class _OgLClientShellState extends State<OgLClientShell> {
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
+  Widget build(BuildContext context) => CallbackShortcuts(
+    bindings: widget.surface.isDesktop
+        ? {
+            const SingleActivator(LogicalKeyboardKey.keyP, control: true): () =>
+                _openFeature(SearchPage(surface: widget.surface)),
+            const SingleActivator(
+              LogicalKeyboardKey.digit1,
+              control: true,
+            ): () =>
+                _select(OgLShellTab.home),
+            const SingleActivator(
+              LogicalKeyboardKey.digit2,
+              control: true,
+            ): () =>
+                _select(OgLShellTab.search),
+            const SingleActivator(
+              LogicalKeyboardKey.comma,
+              control: true,
+            ): () =>
+                _select(OgLShellTab.settings),
+            if (widget.surface.hasAi)
+              const SingleActivator(
+                LogicalKeyboardKey.keyA,
+                control: true,
+                shift: true,
+              ): () =>
+                  _openFeature(AiChatPage(surface: widget.surface)),
+          }
+        : {},
+    child: Focus(
+      autofocus: widget.surface.isDesktop,
+      child: PopScope(
         // 统一接管返回键：二级页 / 弹窗 / 抽屉 / tab / 退出（见 [_handleBack]）。
         canPop: false,
         onPopInvokedWithResult: (bool didPop, Object? result) {
@@ -243,7 +424,9 @@ class _OgLClientShellState extends State<OgLClientShell> {
           unawaited(_handleBack());
         },
         child: _buildShell(context),
-      );
+      ),
+    ),
+  );
 
   /// 原 shell 构建（被 [build] 包在 `PopScope` 里）。
   Widget _buildShell(BuildContext context) {
@@ -255,12 +438,10 @@ class _OgLClientShellState extends State<OgLClientShell> {
       );
     }
     if (!_checked) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if ((_accountId == null ||
-        widget.surface.domain.auth.state == GhAuthState.expired) &&
+            widget.surface.domain.auth.state == GhAuthState.expired) &&
         !_guest) {
       return LoginPage(
         surface: widget.surface,
@@ -276,10 +457,7 @@ class _OgLClientShellState extends State<OgLClientShell> {
     final List<Widget> pages = <Widget>[
       for (final OgLShellTab tab in OgLShellTab.values)
         _visited.contains(tab)
-            ? TickerMode(
-                enabled: tab == _tab,
-                child: _pageFor(tab),
-              )
+            ? TickerMode(enabled: tab == _tab, child: _pageFor(tab))
             : const SizedBox.shrink(),
     ];
     final int index = OgLShellTab.values.indexOf(_tab);
@@ -296,6 +474,7 @@ class _OgLClientShellState extends State<OgLClientShell> {
     if (width < 600) {
       return Scaffold(
         key: _scaffoldKey,
+        drawer: _drawer(),
         body: body,
         bottomNavigationBar: NavigationBar(
           selectedIndex: index,
@@ -330,15 +509,32 @@ class _OgLClientShellState extends State<OgLClientShell> {
     final bool extended = width >= 1200;
     return Scaffold(
       key: _scaffoldKey,
+      drawer: _drawer(),
       body: Row(
         children: <Widget>[
           NavigationRail(
+            leading: widget.surface.hasAi
+                ? IconButton(
+                    tooltip: aiText('menu'),
+                    onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+                    icon: const Icon(Icons.menu),
+                  )
+                : null,
+            trailing: widget.surface.hasAi
+                ? IconButton(
+                    tooltip: aiText('title'),
+                    onPressed: () =>
+                        _openFeature(AiChatPage(surface: widget.surface)),
+                    icon: const Icon(Icons.auto_awesome_outlined),
+                  )
+                : null,
             selectedIndex: index,
             onDestinationSelected: (int value) =>
                 _select(OgLShellTab.values[value]),
             extended: extended,
-            labelType:
-                extended ? NavigationRailLabelType.none : NavigationRailLabelType.all,
+            labelType: extended
+                ? NavigationRailLabelType.none
+                : NavigationRailLabelType.all,
             destinations: <NavigationRailDestination>[
               NavigationRailDestination(
                 icon: const Icon(Icons.folder_outlined),

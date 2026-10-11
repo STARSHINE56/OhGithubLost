@@ -25,6 +25,7 @@ import '../domain/domain_bridge.dart';
 import '../domain/gh/repo_file_service.dart';
 import '../kernel/bridge_registry.dart';
 import '../kernel/contract/module.dart';
+import '../platform/platform.dart';
 import 'app/error_surface.dart';
 import 'app/motion.dart';
 import 'i18n/og_l_i18n.dart';
@@ -54,6 +55,77 @@ class SurfaceBridge {
 
   /// 中枢桥（页面需要业务数据时通过它取）。
   final DomainBridge domain;
+
+  /// AI 与体验功能的展示层门面；页面不直接依赖领域实现。
+  bool get hasAi => domain.ai != null;
+  bool get isDesktop => ogLIsDesktopPlatform;
+  Future<AiSettings> aiSettings() => domain.ai!.settings();
+  Future<bool> aiHasKey({AiSettings? config}) =>
+      domain.ai!.hasKey(config: config);
+  Future<void> aiSaveSettings(
+    AiSettings value, {
+    String? key,
+    bool clearKey = false,
+  }) => domain.ai!.saveSettings(value, key: key, clearKey: clearKey);
+  Future<List<String>> aiDetectModels({String? key, AiSettings? config}) =>
+      domain.ai!.detectModels(key: key, config: config);
+  Future<List<AiConversation>> aiConversations() => domain.ai!.conversations();
+  Future<AiConversation> aiNewChat({String repo = '', String branch = ''}) =>
+      domain.ai!.newConversation(repo: repo, branch: branch);
+  Future<void> aiDeleteChat(String id) => domain.ai!.deleteConversation(id);
+  Future<void> aiSend(
+    AiConversation chat,
+    String text,
+    AiConfirmation confirm,
+  ) => domain.ai!.send(chat, text, confirm);
+  Future<List<Map<String, dynamic>>> aiAudit() => domain.ai!.audit();
+  Future<Map<String, dynamic>> aiRollback(
+    Map<String, dynamic> entry,
+    AiConfirmation confirm,
+  ) => domain.ai!.rollback(entry, confirm);
+  final ValueNotifier<int> aiBuildChanges = ValueNotifier<int>(0);
+  Future<List<Map<String, dynamic>>> aiPollBuilds() async {
+    final builds = await domain.ai!.pollBuilds();
+    if (builds.isNotEmpty) {
+      aiBuildChanges.value++;
+    }
+    return builds;
+  }
+
+  Future<List<Map<String, dynamic>>> githubNotifications({
+    int page = 1,
+    bool all = false,
+  }) => domain.productivity!.notifications(page: page, all: all);
+  Future<void> markGithubNotificationRead(String id) =>
+      domain.productivity!.markRead(id);
+  Future<Map<String, dynamic>> starMetadata() =>
+      domain.productivity!.starMetadata();
+  Future<void> organizeStar(String repo, String category, List<String> tags) =>
+      domain.productivity!.organizeStar(repo, category, tags);
+  Future<Map<String, dynamic>> repoWatches() => domain.productivity!.watches();
+  Future<void> watchRepo(String repo, bool enabled) =>
+      domain.productivity!.setWatch(repo, enabled);
+  Future<List<Map<String, dynamic>>> pollRepoUpdates() =>
+      domain.productivity!.pollUpdates();
+  Future<Map<String, dynamic>> monthlyContributions(
+    String login,
+    DateTime month,
+  ) => domain.productivity!.contributions(login, month);
+
+  /// 产物下载复用原有鉴权与下载队列，不把临时地址交给 AI。
+  Future<void> downloadAiArtifact(Map<String, dynamic> artifact) async {
+    final repo = artifact['repo'] as String;
+    final id = artifact['id'] as int;
+    final first = domain.api.artifactDownloadUrl(repo, id);
+    final direct = await resolveDownloadUrl(first);
+    await domain.downloads.enqueue(
+      url: direct,
+      headers: direct == first ? await downloadAuthHeaders() : const {},
+      fileName: '${artifact['name']}.zip',
+      category: IxDownloadCategory.artifact,
+      connections: settings.settings.downloadConnections,
+    );
+  }
 
   /// 网络门面（**仅供设置页应用 DNS 用**；页面不得直接使用）。
   final NetBridge? net;
@@ -185,7 +257,8 @@ class SurfaceBridge {
       net?.dnsServerChoices ?? const <String, String>{};
 
   /// 当前 DNS 策略摘要（UI 必须向用户展示，不得让用户猜）。
-  String get dnsSummary => net?.dnsSummary ?? OgLI18n.instance.t('common', 'systemResolve');
+  String get dnsSummary =>
+      net?.dnsSummary ?? OgLI18n.instance.t('common', 'systemResolve');
 
   /// 把当前设置里的 DNS 选择应用到网络底座（策略对象可变 → 即时生效）。
   void applyDns() {
@@ -293,7 +366,7 @@ class SurfaceBridge {
   ///   `ogLAccelCandidates` 的 `privateAccelAccepted`。
   /// 判定规则见 `util/download_proxy.dart`。
   Future<({List<String> urls, Map<String, String> headers})>
-      planRepoFileDownload({
+  planRepoFileDownload({
     required String fullName,
     required String path,
     required String branch,
@@ -301,9 +374,12 @@ class SurfaceBridge {
     int? size,
   }) async {
     final OgLSettings current = settings.settings;
-    final String encodedPath =
-        path.split('/').map(Uri.encodeComponent).join('/');
-    final String rawUrl = 'https://raw.githubusercontent.com/$fullName/'
+    final String encodedPath = path
+        .split('/')
+        .map(Uri.encodeComponent)
+        .join('/');
+    final String rawUrl =
+        'https://raw.githubusercontent.com/$fullName/'
         '${Uri.encodeComponent(branch)}/$encodedPath';
     final List<String> candidates = ogLAccelCandidates(
       url: rawUrl,
@@ -324,10 +400,13 @@ class SurfaceBridge {
       //   公开仓库则相反 —— 一个头都不带，代理没必要也不需要令牌。
       return (
         urls: candidates,
-        headers: repoPrivate ? await downloadAuthHeaders() : const <String, String>{},
+        headers: repoPrivate
+            ? await downloadAuthHeaders()
+            : const <String, String>{},
       );
     }
-    final String apiUrl = 'https://api.github.com/repos/$fullName/contents/'
+    final String apiUrl =
+        'https://api.github.com/repos/$fullName/contents/'
         '$encodedPath?ref=${Uri.encodeComponent(branch)}';
     return (
       urls: <String>[apiUrl],
@@ -434,21 +513,22 @@ class SurfaceBridge {
         _themeCacheMotion == motionLevel) {
       return cached;
     }
-    final ThemeData built = buildOgLTheme(
-      brightness,
-      seedColor: ogLSeedColorOf(seed),
-      density: ogLDensityOf(density),
-    ).copyWith(
-      pageTransitionsTheme: OgLMotion.pageTransitions(motionLevel),
-      // ExpansionTile（关于页的诊断折叠组等）也接**动效档位**：
-      // 时长 / 曲线与整页动效同源（档位 0 → 零时长，即"立即展开"）。
-      expansionTileTheme: ExpansionTileThemeData(
-        expansionAnimationStyle: AnimationStyle(
-          duration: OgLOAnimQuality.of(motionLevel).medium,
-          curve: OgLOAnimQuality.of(motionLevel).curve,
-        ),
-      ),
-    );
+    final ThemeData built =
+        buildOgLTheme(
+          brightness,
+          seedColor: ogLSeedColorOf(seed),
+          density: ogLDensityOf(density),
+        ).copyWith(
+          pageTransitionsTheme: OgLMotion.pageTransitions(motionLevel),
+          // ExpansionTile（关于页的诊断折叠组等）也接**动效档位**：
+          // 时长 / 曲线与整页动效同源（档位 0 → 零时长，即"立即展开"）。
+          expansionTileTheme: ExpansionTileThemeData(
+            expansionAnimationStyle: AnimationStyle(
+              duration: OgLOAnimQuality.of(motionLevel).medium,
+              curve: OgLOAnimQuality.of(motionLevel).curve,
+            ),
+          ),
+        );
     _themeCache = built;
     _themeCacheBrightness = brightness;
     _themeCacheSeed = seed;
@@ -466,7 +546,10 @@ class SurfaceBridge {
 /// 用 L1 的 KV 实现设置持久化（**唯一**允许把 L3 的存储需求接到 L1 的地方）。
 class KvSettingsPersistence implements OgLSettingsPersistence {
   /// 创建。
-  const KvSettingsPersistence(this._kv, {this.key = OgLSettingsController.storageKey});
+  const KvSettingsPersistence(
+    this._kv, {
+    this.key = OgLSettingsController.storageKey,
+  });
 
   final DiskKv _kv;
 
@@ -496,13 +579,13 @@ class SurfaceLayerModule extends OgLModule {
 
   @override
   ModuleDescriptor get descriptor => const ModuleDescriptor(
-        id: 'surface.layer',
-        layer: ModuleLayer.surface,
-        version: '0.2.0',
-        requires: <String>['domain.layer'],
-        provides: <String>['surface.bridge'],
-        description: '展示·Material3 页面/主题/设置 的装配入口',
-      );
+    id: 'surface.layer',
+    layer: ModuleLayer.surface,
+    version: '0.2.0',
+    requires: <String>['domain.layer'],
+    provides: <String>['surface.bridge'],
+    description: '展示·Material3 页面/主题/设置 的装配入口',
+  );
 
   @override
   Future<void> onRegister(KernelContext context) async {
@@ -555,9 +638,7 @@ class SurfaceLayerModule extends OgLModule {
 ///
 /// **只暴露一个模块**：展示层的所有能力都从 [SurfaceBridge] 出去，
 /// 不像 L1/L2 那样需要按子系统拆分——因为 UI 本来就是"一张皮"。
-List<OgLModule> surfaceLayerModules() => <OgLModule>[
-      SurfaceLayerModule(),
-    ];
+List<OgLModule> surfaceLayerModules() => <OgLModule>[SurfaceLayerModule()];
 
 /// 存储探针：**按三档方案裁决**「用户拿不拿得到文件」。
 ///

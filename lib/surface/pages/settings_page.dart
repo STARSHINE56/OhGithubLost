@@ -39,6 +39,7 @@ import '../types.dart';
 import '../util/accel.dart';
 import '../widgets/code_editor_field.dart';
 import 'about_page.dart';
+import 'ai_settings_page.dart';
 import 'legal_text_page.dart';
 import 'network_page.dart';
 import 'onboarding_page.dart';
@@ -415,6 +416,13 @@ class _SettingsPageState extends State<SettingsPage> {
               // 根级顺序**严格固定**（不再随缘排列）：
               // 外观 → 语言 → 代码与文件 → 网络 → 存储位置
               // → 账号 → 维护 → 关于 → 许可 → 日志。
+              if (widget.surface.hasAi) Card(child: ListTile(
+                leading: const Icon(Icons.auto_awesome_outlined),
+                title: Text(aiText('settings')),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(context, MaterialPageRoute<void>(
+                  builder: (_) => AiSettingsPage(surface: widget.surface))),
+              )),
               _appearanceSection(theme, value),
               _languageSection(theme),
               _codeSection(context, theme, value),
