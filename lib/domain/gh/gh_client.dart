@@ -82,7 +82,8 @@ class GhRateLimit {
       };
 
   @override
-  String toString() => 'GhRateLimit($remaining/$limit, reset in ${untilReset.inMinutes}min)';
+  String toString() =>
+      'GhRateLimit($remaining/$limit, reset in ${untilReset.inMinutes}min)';
 }
 
 /// 未认证 / 令牌失效。
@@ -217,8 +218,7 @@ class GhWriteResult {
   bool get canForceOverwrite => conflict == GhWriteConflict.staleSha;
 
   @override
-  String toString() =>
-      'GhWriteResult(ok=$ok, conflict=${conflict.name}'
+  String toString() => 'GhWriteResult(ok=$ok, conflict=${conflict.name}'
       '${detail == null ? '' : ', detail=$detail'})';
 }
 
@@ -234,6 +234,7 @@ class GhRequest {
     this.headers = const <String, String>{},
     this.conflictsAsRemoteConflict = false,
     this.cacheBypass = false,
+    this.expectedAccountId,
   });
 
   /// 路径（`/repos/...`）或完整 URL。
@@ -263,6 +264,9 @@ class GhRequest {
 
   /// 本次请求是否**绕过只读缓存**（下拉刷新 / 写后重读时置真）。
   final bool cacheBypass;
+
+  /// 可选的账号绑定；排队或读凭据时切号即拒绝发出请求。
+  final String? expectedAccountId;
 
   /// 拼出完整 URL。
   String toUrl(String base) {
@@ -485,7 +489,9 @@ class GhClient {
   /// 某资源类别是否已知耗尽（诊断用）。
   bool isResourceExhausted(String resource) {
     final known = _rateLimits[resource];
-    return known != null && known.isExhausted && known.untilReset > Duration.zero;
+    return known != null &&
+        known.isExhausted &&
+        known.untilReset > Duration.zero;
   }
 
   /// 由请求路径推导限流资源类别（与 GitHub 的分类一致）。
@@ -511,10 +517,11 @@ class GhClient {
   Future<GhResponse> send(GhRequest request) async {
     // ── 只读缓存（R4）：命中即返回，不打网络、不占额度 ──────────────────
     // 仅对白名单内的 GET 生效；被显式 bypass（下拉刷新 / 写后重读）时跳过。
-    final Duration? cacheTtl =
-        (request.method == NetMethod.get && !request.cacheBypass)
-            ? ttlForPath(request.path)
-            : null;
+    final Duration? cacheTtl = (request.method == NetMethod.get &&
+            !request.cacheBypass &&
+            request.expectedAccountId == null)
+        ? ttlForPath(request.path)
+        : null;
     if (cacheTtl != null) {
       final ({String body, String link})? cached =
           await _readCache?.get(request.path, request.query, cacheTtl);
@@ -539,7 +546,9 @@ class GhClient {
     // search 的额度耗尽**不会**阻塞 core 请求（各自独立计数）。
     final resource = resourceOfPath(request.path);
     final known = _rateLimits[resource];
-    if (known != null && known.isExhausted && known.untilReset > Duration.zero) {
+    if (known != null &&
+        known.isExhausted &&
+        known.untilReset > Duration.zero) {
       throw GhRateLimitException(
         message: '$resource 额度已耗尽，将在 ${known.untilReset.inMinutes} 分钟后恢复',
         resetAt: known.resetAt,
@@ -548,7 +557,17 @@ class GhClient {
 
     await _semaphore.acquire();
     try {
-      final token = await _auth.activeToken();
+      final expected = request.expectedAccountId;
+      if (expected != null && await _auth.activeAccountId() != expected) {
+        throw const GhAuthException('accountChanged');
+      }
+      final token = expected == null
+          ? await _auth.activeToken()
+          : await _auth.tokenFor(expected);
+      if (expected != null &&
+          (token == null || await _auth.activeAccountId() != expected)) {
+        throw const GhAuthException('accountChanged');
+      }
       final headers = <String, String>{
         'accept': 'application/vnd.github+json',
         'x-github-api-version': '2022-11-28',
@@ -639,7 +658,8 @@ class GhClient {
     Map<String, String> query = const <String, String>{},
     String? label,
   }) async {
-    final response = await send(GhRequest(path: path, query: query, label: label));
+    final response =
+        await send(GhRequest(path: path, query: query, label: label));
     return response.jsonObject;
   }
 
@@ -649,7 +669,8 @@ class GhClient {
     Map<String, String> query = const <String, String>{},
     String? label,
   }) async {
-    final response = await send(GhRequest(path: path, query: query, label: label));
+    final response =
+        await send(GhRequest(path: path, query: query, label: label));
     return response.jsonAsList;
   }
 

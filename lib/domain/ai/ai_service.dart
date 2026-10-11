@@ -16,6 +16,7 @@ class AiService {
     required AiGithubRequest github,
     this.streamProvider,
     this.actionLogs,
+    this.scopedGithub,
     required this.provider,
     required this.account,
   })  : _store = store,
@@ -24,6 +25,7 @@ class AiService {
   final DiskKv _store;
   final DiskVault _vault;
   final AiGithubRequest _github;
+  final AiGithubScopedRequest? scopedGithub;
   final AiProviderStreamRequest? streamProvider;
   final Future<Map<String, String>> Function(String, int)? actionLogs;
   final _cache = <String, ({DateTime at, Object? value})>{};
@@ -53,7 +55,9 @@ class AiService {
     if (method != 'GET') {
       _cache.clear();
     }
-    final result = await _github(method, path, body, query);
+    final result = scopedGithub == null
+        ? await _github(method, path, body, query)
+        : await scopedGithub!(id, method, path, body, query);
     await _checkAccount(id);
     if (method == 'GET' && config.cache) {
       if (_cache.length >= 100) {
@@ -516,7 +520,8 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
       'cancelled',
       'streamInterrupted',
       'responseTooLarge',
-      'invalidResponse'
+      'invalidResponse',
+      'accountChanged'
     ]) {
       if (text.contains(code)) {
         return code;
@@ -528,7 +533,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
     if (text.contains('403')) {
       return 'forbidden';
     }
-    if (text.contains('404')) {
+    if (text.contains('404') || text.contains('GhNotFoundException')) {
       return 'notFound';
     }
     if (text.contains('429') || text.contains('RateLimit')) {

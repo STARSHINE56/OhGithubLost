@@ -12,6 +12,23 @@ import '../../lib/kernel/contract/disk_store.dart';
 import 'ai_safety_cases.dart' show require, rejects;
 
 Map<String, Future<void> Function()> aiUpgradeCases() => {
+      'Production GitHub request path receives the conversation account binding':
+          () async {
+        final ai = AiService(
+            store: InMemoryKv(),
+            vault: InMemoryVault(),
+            account: () async => 'alice',
+            provider: (_, endpoint, key, body) async => {},
+            github: (_, path, body, query) async =>
+                throw StateError('Unbound request used'),
+            scopedGithub: (id, method, path, body, query) async {
+              require(id == 'alice', 'Wrong account binding');
+              return {'login': 'alice'};
+            });
+        final user = await ai
+            .readTool(await ai.newConversation(), 'current_user', {}) as Map;
+        require(user['login'] == 'alice', 'Scoped request lost');
+      },
       'File ranges use immutable SHA and preserve total line counts': () async {
         final content = List.generate(1000, (i) => '源码行 ${i + 1}').join('\n');
         var reads = 0;

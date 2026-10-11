@@ -14,6 +14,7 @@ import 'package:ohgithublost/domain/domain_bridge.dart';
 import 'package:ohgithublost/domain/gh/gh_api.dart';
 import 'package:ohgithublost/domain/gh/gh_auth.dart';
 import 'package:ohgithublost/domain/gh/gh_client.dart';
+import 'package:ohgithublost/domain/ix/ix_download.dart';
 import 'package:ohgithublost/domain/ix/ix_notify.dart';
 import 'package:ohgithublost/domain/ix/ix_session.dart';
 import 'package:ohgithublost/domain/ix/ix_task.dart';
@@ -27,6 +28,17 @@ import 'package:ohgithublost/surface/pages/ai_confirmation.dart';
 import 'package:ohgithublost/surface/pages/ai_settings_page.dart';
 import 'package:ohgithublost/surface/settings.dart';
 import 'package:ohgithublost/surface/surface_bridge.dart';
+
+/// 布局测试不订阅原生后台下载插件的单订阅全局流。
+class _UnusedDownloadBackend implements IxDownloadBackend {
+  @override
+  Stream<IxDownloadEvent> get events => Stream<IxDownloadEvent>.empty();
+  @override
+  void dispose() {}
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnsupportedError('Downloads are not used in layout tests');
+}
 
 Future<SurfaceBridge> bridge() async {
   final store = InMemoryKv(), vault = InMemoryVault();
@@ -42,6 +54,8 @@ Future<SurfaceBridge> bridge() async {
       account: auth.activeAccountId,
       github: (_, path, body, query) async => {},
       provider: (_, endpoint, key, body) async => {});
+  final downloads = IxDownloadManager(backend: _UnusedDownloadBackend());
+  addTearDown(downloads.dispose);
   final domain = DomainBridge(
       auth: auth,
       client: client,
@@ -49,6 +63,7 @@ Future<SurfaceBridge> bridge() async {
       session: IxSession(auth: auth, store: store),
       tasks: IxTaskRunner(),
       notifications: IxNotificationCenter(),
+      downloads: downloads,
       sysInfo: SysInfoService(),
       sysAccess: SysAccessGuard(store: store),
       ai: ai);

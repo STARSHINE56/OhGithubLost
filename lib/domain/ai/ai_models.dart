@@ -10,6 +10,15 @@ typedef AiGithubRequest = Future<Object?> Function(
   Map<String, Object?>? body,
   Map<String, String> query,
 );
+
+/// 将请求固定在发起会话的账号，避免并发排队期间切号串用凭据。
+typedef AiGithubScopedRequest = Future<Object?> Function(
+  String accountId,
+  String method,
+  String path,
+  Map<String, Object?>? body,
+  Map<String, String> query,
+);
 typedef AiProviderRequest = Future<Map<String, dynamic>> Function(
   AiSettings settings,
   String endpoint,

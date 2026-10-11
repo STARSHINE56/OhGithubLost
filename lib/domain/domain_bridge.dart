@@ -414,12 +414,9 @@ class DomainLayerModule extends OgLModule {
     // 两条通道分别注入：AI 密钥不经 GitHub 请求或镜像传输。
     final client = context.di.resolve<GhClient>();
     final base = BaseBridge.of(context.bridges);
-    Future<Object?> githubRequest(
-      String method,
-      String path,
-      Map<String, Object?>? body,
-      Map<String, String> query,
-    ) async {
+    Future<Object?> githubRequest(String method, String path,
+        Map<String, Object?>? body, Map<String, String> query,
+        {String? expectedAccountId}) async {
       final response = await client.send(
         GhRequest(
           path: path,
@@ -427,6 +424,7 @@ class DomainLayerModule extends OgLModule {
           body: body,
           query: query,
           cacheBypass: true,
+          expectedAccountId: expectedAccountId,
         ),
       );
       return response.body.trim().isEmpty
@@ -442,6 +440,8 @@ class DomainLayerModule extends OgLModule {
         store: base.disk.kv,
         vault: base.disk.vault,
         github: githubRequest,
+        scopedGithub: (id, method, path, body, query) =>
+            githubRequest(method, path, body, query, expectedAccountId: id),
         provider: provider.request,
         account: ghAuth.activeAccountId,
         actionLogs: context.di.resolve<IxActionLogs>().fetch,
