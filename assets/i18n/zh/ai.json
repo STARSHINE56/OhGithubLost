@@ -12,8 +12,8 @@
   "baseUrl": "API 服务地址",
   "urlHint": "HTTPS；包含 /v1 或 /v1beta（若服务要求），不要填完整聊天地址",
   "apiKey": "API Key",
-  "keySaved": "此服务的密钥已加密保存；留空保留",
-  "keyHint": "仅保存在设备的安全保险库中",
+  "keySaved": "此服务的密钥已安全保存，重启后自动复用；留空不修改",
+  "keyHint": "输入后自动保存到设备安全保险库",
   "removeKey": "删除此服务的密钥",
   "detectModels": "自动检测可用模型",
   "model": "模型",
@@ -189,7 +189,7 @@
   "quickIssuesTask": "总结当前仓库最近的 Issue 和 PR，区分待处理事项。",
   "repositoryRequired": "此操作需要仓库，请先选择；查询自己的仓库无需选择仓库",
   "modelRequired": "请填写模型 ID",
-  "budgetExceeded": "已达到任务或上下文预算，请缩小范围或在设置中增加预算",
+  "budgetExceeded": "这次内容过长，请缩小文件范围或分成几个问题；历史记录已保留",
   "historyCorrupt": "聊天历史读取失败，原始数据已保留，请重试",
   "unauthorized": "认证失败（401），请检查当前账号或 API Key",
   "forbidden": "访问被拒绝（403），请检查仓库或接口权限",
@@ -205,5 +205,6 @@
   "connectionFailed": "连接失败或超时，请检查网络后重试",
   "serverUnavailable": "服务暂时不可用，已有限重试，请稍后再试",
   "contextFilesTask": "请先读取以下仓库文件作为上下文：",
-  "confirmDeletion": "单独确认删除以下文件"
+  "confirmDeletion": "单独确认删除以下文件",
+  "automaticBudgetHint": "应用会根据所选模式自动管理上下文和回复长度，无需填写预算。较大的工具结果会按需分段读取。"
 }

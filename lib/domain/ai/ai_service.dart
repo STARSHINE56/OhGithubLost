@@ -315,7 +315,7 @@ class AiService {
     _busy = true;
     try {
       await _checkAccount(chat.accountId);
-      final config = await settings();
+      final config = AiContext.effectiveSettings(await settings());
       if (!config.enabled) {
         throw const AiException('disabled');
       }
@@ -388,6 +388,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
       for (var step = 0; step < 12; step++) {
         await _checkAccount(chat.accountId);
         cancel.check();
+        AiContext.fit(messages, tools, config);
         final input =
             AiContext.estimate(jsonEncode(messages) + jsonEncode(tools));
         if (input + config.outputTokens > config.contextTokens ||

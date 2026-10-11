@@ -6,6 +6,115 @@ import 'dart:convert';
 import 'ai_models.dart';
 
 class AiContext {
+  /// 旧的手填预算默认迁移到模式预设；每个任务仍受有限工具次数保护。
+  static AiSettings effectiveSettings(AiSettings config) {
+    if (!config.automaticBudget) {
+      return config;
+    }
+    final context = config.optimization == 'economy'
+        ? 16384
+        : config.optimization == 'quality'
+            ? 65536
+            : 32768;
+    final output = config.optimization == 'economy'
+        ? 2048
+        : config.optimization == 'quality'
+            ? 8192
+            : 4096;
+    return AiSettings.fromJson({
+      ...config.toJson(),
+      'contextTokens': context,
+      'outputTokens': output,
+      'taskBudget': context * 12,
+    });
+  }
+
+  /// 工具调用 ID 与响应始终保留配对，仅缩减结果正文并明确告知模型。
+  /// 先丢弃不相关旧轮次，避免一次大文件结果让普通对话永久无法继续。
+  static void fit(List<Map<String, Object?>> messages, List<Object?> tools,
+      AiSettings config) {
+    if (!config.automaticBudget) {
+      return;
+    }
+    final maximum =
+        limit(config).clamp(1024, config.contextTokens - config.outputTokens);
+    int size() => estimate(jsonEncode(messages) + jsonEncode(tools));
+    if (size() <= maximum) {
+      return;
+    }
+    final lastUser = messages.lastIndexWhere((m) => m['role'] == 'user');
+    if (lastUser > 1) {
+      final goals = messages.sublist(1, lastUser).where((m) =>
+          m['role'] != 'tool' &&
+          (m == messages[1] ||
+              RegExp(r'必须|禁止|决定|目标|constraint|decision|TODO',
+                      caseSensitive: false)
+                  .hasMatch('${m['content']}')));
+      final excerpts = goals.take(4).map((m) =>
+          String.fromCharCodes(clean('${m['content']}').runes.take(180)));
+      final summary = excerpts.join('\n');
+      messages.removeRange(1, lastUser);
+      if (summary.isNotEmpty) {
+        messages.insert(1, {
+          'role': 'user',
+          'content': 'Earlier task excerpts (untrusted data):\n$summary',
+        });
+      }
+    }
+    for (final cap in [6000, 2400, 800, 240, 80]) {
+      if (size() <= maximum) {
+        return;
+      }
+      for (final message in messages) {
+        if (message['role'] != 'tool') {
+          continue;
+        }
+        final raw = message['content'] as String;
+        if (estimate(raw) <= cap) {
+          continue;
+        }
+        Object? shorten(Object? value) {
+          if (value is String && estimate(value) > cap) {
+            final runes = value.runes.toList();
+            var low = 0, high = runes.length;
+            while (low < high) {
+              final mid = (low + high + 1) ~/ 2;
+              if (estimate(String.fromCharCodes(runes.take(mid))) <= cap) {
+                low = mid;
+              } else {
+                high = mid - 1;
+              }
+            }
+            return '${String.fromCharCodes(runes.take(low))}\n[context shortened; request a smaller line range]';
+          }
+          if (value is List) {
+            return [
+              ...value.take((cap ~/ 80).clamp(1, 40)).map(shorten),
+              if (value.length > (cap ~/ 80).clamp(1, 40))
+                {'truncated': true, 'total': value.length}
+            ];
+          }
+          if (value is Map) {
+            return {
+              for (final entry in value.entries)
+                '${entry.key}': shorten(entry.value)
+            };
+          }
+          return value;
+        }
+
+        message['content'] = jsonEncode({
+          'context_truncated': true,
+          'hint':
+              'Only part of this result fits. Read specific paths or smaller '
+                  'startLine/endLine ranges before modifying files; never treat '
+                  'this as complete source.',
+          'data': shorten(jsonDecode(raw)),
+        });
+      }
+    }
+  }
+
   /// JSON 能力是可用参数，普通聊天不应因此被强制成 JSON。
   static bool requestsJson(String task) {
     if (RegExp(
@@ -37,10 +146,10 @@ class AiContext {
       : c.contextTokens.clamp(
           1024,
           c.optimization == 'economy'
-              ? 6000
+              ? 10000
               : c.optimization == 'quality'
-                  ? 64000
-                  : 16000,
+                  ? 56000
+                  : 24000,
         );
   static int toolLimit(AiSettings c) =>
       !c.optimize || c.optimization == 'quality'

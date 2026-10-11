@@ -12,8 +12,8 @@
   "baseUrl": "Базовый URL API",
   "urlHint": "HTTPS; при необходимости /v1 или /v1beta, без полного пути чата",
   "apiKey": "Ключ API",
-  "keySaved": "Ключ защищённо сохранён; оставьте пустым, чтобы сохранить",
-  "keyHint": "Хранится только в защищённом хранилище устройства",
+  "keySaved": "Ключ защищённо сохранён и используется после перезапуска; пустое поле не изменяет его",
+  "keyHint": "Автоматически сохраняется в защищённом хранилище устройства",
   "removeKey": "Удалить ключ сервиса",
   "detectModels": "Найти доступные модели",
   "model": "Модель",
@@ -189,7 +189,7 @@
   "quickIssuesTask": "Summarize recent Issues and PRs in the current repository, identifying pending work.",
   "repositoryRequired": "Choose a repository for this operation; listing your repositories does not require one",
   "modelRequired": "Enter a model ID",
-  "budgetExceeded": "Task or context budget reached; reduce the scope or increase the budget",
+  "budgetExceeded": "Запрос слишком большой. Выберите меньше файлов или разделите вопрос; история сохранена.",
   "historyCorrupt": "Unable to load chat history; original data has been preserved",
   "unauthorized": "Authentication failed (401); check the account or API key",
   "forbidden": "Access denied (403); check repository or API permissions",
@@ -205,5 +205,6 @@
   "connectionFailed": "Connection failed or timed out; check your network and retry",
   "serverUnavailable": "Service temporarily unavailable; retry later",
   "contextFilesTask": "Read these repository files as context first:",
-  "confirmDeletion": "Отдельно подтвердите удаление файлов"
+  "confirmDeletion": "Отдельно подтвердите удаление файлов",
+  "automaticBudgetHint": "Контекст и длина ответа управляются автоматически по выбранному режиму. Вводить бюджет не нужно; большие результаты читаются частями."
 }

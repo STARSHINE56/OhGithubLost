@@ -46,6 +46,9 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   List<String> _models = [];
   Map<String, dynamic> _caps = {};
   Timer? _saveTimer;
+  Future<void> _saveQueue = Future<void>.value();
+  bool _keyDirty = false;
+  String? _keyScope;
   String? _githubLogin;
   int _loginEpoch = 0;
   String? _shownKeyId, _shownCapabilityId;
@@ -115,6 +118,9 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   @override
   void dispose() {
     widget.surface.aiAccountChanges.removeListener(_accountChanged);
+    if (!_loading && (_saveTimer?.isActive == true || _keyDirty)) {
+      unawaited(_save(silent: true));
+    }
     _saveTimer?.cancel();
     _url.dispose();
     _key.dispose();
@@ -134,6 +140,10 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
         if (_shownKeyId != config.keyId) {
           _models = [];
           _savedKey = false;
+          // 不把另一服务的输入密钥带到新的端点。
+          _key.clear();
+          _keyDirty = false;
+          _keyScope = null;
         }
         _caps = {};
         _shownKeyId = config.keyId;
@@ -145,22 +155,37 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
         Timer(const Duration(milliseconds: 700), () => _save(silent: true));
   }
 
-  Future<void> _save({bool clear = false, bool silent = false}) async {
-    if (_loading || _busy) {
-      return;
+  Future<void> _save({bool clear = false, bool silent = false}) {
+    if (_loading) {
+      return Future<void>.value();
     }
+    _saveTimer?.cancel();
+    final config = _config;
+    final enteredKey = _key.text;
+    final key =
+        !clear && _keyDirty && _keyScope == config.keyId ? enteredKey : null;
+    // 在 await 或页面销毁之前取快照；串行写入避免较旧的输入覆盖新值。
+    _saveQueue = _saveQueue.then(
+        (_) => _persist(config, enteredKey, key, clear: clear, silent: silent));
+    return _saveQueue;
+  }
+
+  Future<void> _persist(AiSettings config, String enteredKey, String? key,
+      {required bool clear, required bool silent}) async {
     try {
-      final config = _config;
-      await widget.surface.aiSaveSettings(config,
-          key: silent || clear ? null : _key.text, clearKey: clear);
-      if (!silent) {
-        _key.clear();
-      }
+      await widget.surface.aiSaveSettings(config, key: key, clearKey: clear);
       final saved = await widget.surface.aiHasKey(config: config);
       final models = await widget.surface.aiCachedModels(config);
       final caps = await widget.surface.aiCapabilities(config);
       if (mounted && config.capabilityId == _config.capabilityId) {
         setState(() {
+          if (_key.text == enteredKey) {
+            _keyDirty = false;
+            // 自动保存不清空正在编辑的内容，以免继续输入只保存后半段。
+            if (!silent || clear) {
+              _key.clear();
+            }
+          }
           _savedKey = saved;
           _models = models;
           _caps = caps;
@@ -333,8 +358,14 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
                                   obscureText: true,
                                   enableSuggestions: false,
                                   autocorrect: false,
+                                  onChanged: (_) {
+                                    _keyDirty = true;
+                                    _keyScope = _config.keyId;
+                                    _schedule();
+                                  },
                                   decoration: InputDecoration(
                                       labelText: aiText('apiKey'),
+                                      helperMaxLines: 3,
                                       helperText: aiText(
                                           _savedKey ? 'keySaved' : 'keyHint'))),
                               TextField(
@@ -414,18 +445,13 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
                                   ['economy', 'balanced', 'quality']),
                               _switch('autoSummary'),
                               _switch('cache'),
-                              _number('contextTokens'),
-                              _number('taskBudget'),
-                              _number('outputTokens'),
-                              _number('inputPrice', decimal: true),
-                              _number('outputPrice', decimal: true),
-                              Text(aiText('priceHint')),
+                              Text(aiText('automaticBudgetHint')),
                               FutureBuilder<Map<String, dynamic>>(
                                   future: widget.surface.aiUsageStats(),
                                   builder: (context, snapshot) {
                                     final usage = snapshot.data ?? {};
                                     return Text(
-                                        '${aiText('total')}: ${usage['input'] ?? 0} / ${usage['output'] ?? 0} · ${aiText('cached')}: ${usage['cached'] ?? 0} · ${aiText('cost')}: ${((usage['cost'] as num?) ?? 0).toStringAsFixed(6)}${usage['estimated'] == true ? ' (${aiText('estimated')})' : ''}');
+                                        '${aiText('total')}: ${usage['input'] ?? 0} / ${usage['output'] ?? 0} · ${aiText('cached')}: ${usage['cached'] ?? 0}${usage['estimated'] == true ? ' (${aiText('estimated')})' : ''}');
                                   }),
                             ]),
                             _section('chatExperience', [

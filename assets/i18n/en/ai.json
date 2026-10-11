@@ -12,8 +12,8 @@
   "baseUrl": "API base URL",
   "urlHint": "HTTPS; include /v1 or /v1beta when required, not the full chat endpoint",
   "apiKey": "API key",
-  "keySaved": "Key for this service is securely saved; leave blank to keep it",
-  "keyHint": "Stored only in the device secure vault",
+  "keySaved": "Key securely saved and reused after restart; leave blank to keep it",
+  "keyHint": "Automatically saved to the device secure vault after typing",
   "removeKey": "Remove this service key",
   "detectModels": "Detect available models",
   "model": "Model",
@@ -189,7 +189,7 @@
   "quickIssuesTask": "Summarize recent Issues and PRs in the current repository, identifying pending work.",
   "repositoryRequired": "Choose a repository for this operation; listing your repositories does not require one",
   "modelRequired": "Enter a model ID",
-  "budgetExceeded": "Task or context budget reached; reduce the scope or increase the budget",
+  "budgetExceeded": "This request is too large. Select fewer files or split the question; history is preserved.",
   "historyCorrupt": "Unable to load chat history; original data has been preserved",
   "unauthorized": "Authentication failed (401); check the account or API key",
   "forbidden": "Access denied (403); check repository or API permissions",
@@ -205,5 +205,6 @@
   "connectionFailed": "Connection failed or timed out; check your network and retry",
   "serverUnavailable": "Service temporarily unavailable; retry later",
   "contextFilesTask": "Read these repository files as context first:",
-  "confirmDeletion": "Confirm file deletion separately"
+  "confirmDeletion": "Confirm file deletion separately",
+  "automaticBudgetHint": "Context and reply length are managed automatically for the selected mode. No budget entry is needed; large tool results are read in smaller ranges."
 }

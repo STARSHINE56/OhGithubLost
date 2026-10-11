@@ -325,6 +325,27 @@ void main() {
     expect(find.text(aiText('manualModel')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('Token settings need only a mode, without numeric budget entry',
+      (tester) async {
+    final surface = await bridge();
+    await tester
+        .pumpWidget(MaterialApp(home: AiSettingsPage(surface: surface)));
+    await tester.pumpAndSettle();
+    final hint = find.text(aiText('automaticBudgetHint'));
+    await tester.scrollUntilVisible(hint, 200,
+        scrollable: find.byType(Scrollable).first);
+    expect(hint, findsOneWidget);
+    for (final name in [
+      'contextTokens',
+      'taskBudget',
+      'outputTokens',
+      'inputPrice',
+      'outputPrice'
+    ]) {
+      expect(find.widgetWithText(TextField, aiText(name)), findsNothing);
+    }
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
       'Leaving settings immediately persists a pending manual model change',
       (tester) async {
@@ -346,6 +367,79 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect((await surface.aiSettings()).model, 'manual-model');
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('API key is saved on immediate exit and reused on reopening',
+      (tester) async {
+    final surface = await bridge();
+    await tester.pumpWidget(MaterialApp(
+        home: Builder(
+            builder: (context) => Scaffold(
+                body: TextButton(
+                    onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                            builder: (_) => AiSettingsPage(surface: surface))),
+                    child: const Text('settings'))))));
+    await tester.tap(find.text('settings'));
+    await tester.pumpAndSettle();
+    final key = find.widgetWithText(TextField, aiText('apiKey'));
+    await tester.ensureVisible(key);
+    await tester.enterText(key, 'test-persisted-model-key');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(await surface.aiHasKey(), true);
+    await tester.tap(find.text('settings'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(key).controller!.text, isEmpty);
+    expect(find.text(aiText('keySaved')), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(await surface.aiHasKey(), true);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('Key autosave keeps editing intact and isolates provider secrets',
+      (tester) async {
+    String? usedKey;
+    final surface = await bridge(provider: (_, endpoint, key, body) async {
+      usedKey = key;
+      return {
+        'choices': [
+          {
+            'message': {'role': 'assistant', 'content': 'ok'}
+          }
+        ]
+      };
+    });
+    const config = AiSettings(enabled: true, model: 'manual', streaming: false);
+    await surface.aiSaveSettings(config);
+    await tester
+        .pumpWidget(MaterialApp(home: AiSettingsPage(surface: surface)));
+    await tester.pumpAndSettle();
+    final key = find.widgetWithText(TextField, aiText('apiKey'));
+    await tester.ensureVisible(key);
+    await tester.enterText(key, 'test-first');
+    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(key).controller!.text, 'test-first');
+    await tester.enterText(key, 'test-first-complete');
+    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pumpAndSettle();
+    final chat = await surface.domain.ai!.newConversation();
+    await surface.domain.ai!.send(chat, 'hello', (_) async => false);
+    expect(usedKey, 'test-first-complete');
+    await tester.enterText(key, '');
+    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pumpAndSettle();
+    expect(await surface.aiHasKey(config: config), true);
+    final url = find.widgetWithText(TextField, aiText('baseUrl'));
+    await tester.ensureVisible(url);
+    await tester.enterText(url, 'https://another-service.example/v1');
+    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pumpAndSettle();
+    expect(await surface.aiHasKey(), false);
+    expect(await surface.aiHasKey(config: config), true);
+    expect(tester.widget<TextField>(key).controller!.text, isEmpty);
     expect(tester.takeException(), isNull);
   });
   testWidgets(

@@ -12,6 +12,147 @@ import '../../lib/kernel/contract/disk_store.dart';
 import 'ai_safety_cases.dart' show require, rejects;
 
 Map<String, Future<void> Function()> aiUpgradeCases() => {
+      'Automatic mode ignores stale manual budgets and cumulative conversation usage':
+          () async {
+        var calls = 0;
+        final ai = AiService(
+            store: InMemoryKv(),
+            vault: InMemoryVault(),
+            account: () async => 'alice',
+            github: (_, path, body, query) async => {},
+            provider: (config, endpoint, key, body) async {
+              calls++;
+              require(
+                  config.contextTokens == 32768 && body?['max_tokens'] == 4096,
+                  'Automatic mode kept stale limits');
+              return {
+                'choices': [
+                  {
+                    'message': {'role': 'assistant', 'content': 'ok'}
+                  }
+                ]
+              };
+            });
+        final old = AiSettings.fromJson({
+          'enabled': true,
+          'model': 'manual',
+          'taskBudget': 1024,
+          'contextTokens': 1024,
+          'outputTokens': 128
+        });
+        await ai.saveSettings(old, key: 'KEY');
+        final chat = await ai.newConversation();
+        chat.usage['input'] = 90000;
+        await ai.send(chat, '读取当前仓库', (_) async => false);
+        require(calls == 1, 'Historic usage blocked an ordinary request');
+      },
+      'Large source tool results fit automatically with valid tool pairs and explicit truncation':
+          () async {
+        final config = AiContext.effectiveSettings(const AiSettings());
+        final messages = <Map<String, Object?>>[
+          {'role': 'system', 'content': 'Use tools safely'},
+          {'role': 'user', 'content': '目标：分析源码，禁止覆盖分支'},
+          {'role': 'assistant', 'content': List.filled(16000, '旧内容').join()},
+          {'role': 'user', 'content': '读取文件'},
+          {
+            'role': 'assistant',
+            'content': '',
+            'tool_calls': [
+              {
+                'id': 'source',
+                'type': 'function',
+                'function': {
+                  'name': 'read_file',
+                  'arguments': '{"path":"app.dart"}'
+                }
+              },
+              {
+                'id': 'info',
+                'type': 'function',
+                'function': {'name': 'repository_info', 'arguments': '{}'}
+              }
+            ]
+          },
+          {
+            'role': 'tool',
+            'tool_call_id': 'source',
+            'content': jsonEncode({
+              'path': 'app.dart',
+              'sha': 'version',
+              'content': List.filled(100000, '源码').join()
+            })
+          },
+          {
+            'role': 'tool',
+            'tool_call_id': 'info',
+            'content': '{"name":"project"}'
+          },
+        ];
+        AiContext.fit(messages, const [], config);
+        require(
+            AiContext.estimate(jsonEncode(messages)) <= AiContext.limit(config),
+            'Automatic context did not fit');
+        require(
+            messages
+                    .where((m) => m['role'] == 'tool')
+                    .map((m) => m['tool_call_id'])
+                    .join(',') ==
+                'source,info',
+            'Tool responses were orphaned');
+        require(
+            (messages.firstWhere((m) => m['tool_calls'] != null)['tool_calls']
+                        as List)
+                    .length ==
+                2,
+            'Tool calls were partially truncated');
+        final result = jsonDecode(
+            messages.firstWhere((m) => m['tool_call_id'] == 'source')['content']
+                as String) as Map;
+        require(
+            result['context_truncated'] == true &&
+                (result['data'] as Map)['path'] == 'app.dart',
+            'Partial source was not identified');
+        require(jsonEncode(messages).contains('禁止覆盖分支'),
+            'Automatic fitting lost task constraints');
+      },
+      'Restarted AI service loads its secure key without exposing it in settings or history':
+          () async {
+        final store = InMemoryKv(), vault = InMemoryVault();
+        const secret = 'test-persistent-ai-secret';
+        String? usedKey;
+        AiService create() => AiService(
+            store: store,
+            vault: vault,
+            account: () async => 'alice',
+            github: (_, path, body, query) async => {},
+            provider: (_, endpoint, key, body) async {
+              usedKey = key;
+              require(!jsonEncode(body).contains(secret),
+                  'API key leaked into model message payload');
+              return {
+                'choices': [
+                  {
+                    'message': {'role': 'assistant', 'content': 'ok'}
+                  }
+                ]
+              };
+            });
+        const config = AiSettings(enabled: true, model: 'manual');
+        final before = create();
+        await before.saveSettings(config, key: secret);
+        final after = create();
+        require(await after.hasKey(), 'Restart lost the secure key');
+        await after.saveSettings(await after.settings(), key: '');
+        final chat = await after.newConversation();
+        await after.send(chat, 'hello', (_) async => false);
+        require(usedKey == secret, 'Chat did not reuse the stored credential');
+        require(!jsonEncode(store.snapshot).contains(secret),
+            'Credential leaked into ordinary settings');
+        require(!(await vault.readSecret('ai.chats.alice'))!.contains(secret),
+            'Credential leaked into chat history');
+        await after.saveSettings(config, clearKey: true);
+        require(!await create().hasKey(), 'Explicit deletion did not persist');
+      },
       'JSON-capable models are not forced into JSON for ordinary repository queries':
           () async {
         final parameters = <bool>[];
@@ -416,7 +557,11 @@ Map<String, Future<void> Function()> aiUpgradeCases() => {
               return {};
             });
         await ai.saveSettings(
-            const AiSettings(enabled: true, model: 'manual', taskBudget: 1024),
+            const AiSettings(
+                enabled: true,
+                model: 'manual',
+                taskBudget: 1024,
+                automaticBudget: false),
             key: 'KEY');
         final chat = await ai.newConversation();
         await rejects(

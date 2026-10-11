@@ -12,8 +12,8 @@
   "baseUrl": "API 服務位址",
   "urlHint": "HTTPS；需要時包含 /v1 或 /v1beta，不要填完整聊天位址",
   "apiKey": "API Key",
-  "keySaved": "此服務的金鑰已加密儲存；留空保留",
-  "keyHint": "僅儲存在裝置安全保險庫中",
+  "keySaved": "此服務的金鑰已安全儲存，重啟後自動重用；留空不修改",
+  "keyHint": "輸入後自動儲存到裝置安全保險庫",
   "removeKey": "刪除此服務的金鑰",
   "detectModels": "自動偵測可用模型",
   "model": "模型",
@@ -189,7 +189,7 @@
   "quickIssuesTask": "Summarize recent Issues and PRs in the current repository, identifying pending work.",
   "repositoryRequired": "Choose a repository for this operation; listing your repositories does not require one",
   "modelRequired": "Enter a model ID",
-  "budgetExceeded": "Task or context budget reached; reduce the scope or increase the budget",
+  "budgetExceeded": "這次內容過長，請縮小檔案範圍或拆成幾個問題；歷史紀錄已保留",
   "historyCorrupt": "Unable to load chat history; original data has been preserved",
   "unauthorized": "Authentication failed (401); check the account or API key",
   "forbidden": "Access denied (403); check repository or API permissions",
@@ -205,5 +205,6 @@
   "connectionFailed": "Connection failed or timed out; check your network and retry",
   "serverUnavailable": "Service temporarily unavailable; retry later",
   "contextFilesTask": "Read these repository files as context first:",
-  "confirmDeletion": "單獨確認刪除下列檔案"
+  "confirmDeletion": "單獨確認刪除下列檔案",
+  "automaticBudgetHint": "應用程式會依所選模式自動管理上下文與回覆長度，無需填寫預算。較大的工具結果會按需分段讀取。"
 }

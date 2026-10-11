@@ -12,8 +12,8 @@
   "baseUrl": "API-Basis-URL",
   "urlHint": "HTTPS; ggf. /v1 oder /v1beta, nicht den vollständigen Chat-Endpunkt",
   "apiKey": "API-Schlüssel",
-  "keySaved": "Schlüssel sicher gespeichert; leer lassen zum Beibehalten",
-  "keyHint": "Nur im sicheren Gerätespeicher gespeichert",
+  "keySaved": "Schlüssel sicher gespeichert und nach Neustart wiederverwendet; leer lassen zum Beibehalten",
+  "keyHint": "Nach der Eingabe automatisch im sicheren Gerätespeicher gespeichert",
   "removeKey": "Diesen Schlüssel entfernen",
   "detectModels": "Verfügbare Modelle erkennen",
   "model": "Modell",
@@ -189,7 +189,7 @@
   "quickIssuesTask": "Summarize recent Issues and PRs in the current repository, identifying pending work.",
   "repositoryRequired": "Choose a repository for this operation; listing your repositories does not require one",
   "modelRequired": "Enter a model ID",
-  "budgetExceeded": "Task or context budget reached; reduce the scope or increase the budget",
+  "budgetExceeded": "Die Anfrage ist zu groß. Wählen Sie weniger Dateien oder teilen Sie die Frage auf; der Verlauf bleibt erhalten.",
   "historyCorrupt": "Unable to load chat history; original data has been preserved",
   "unauthorized": "Authentication failed (401); check the account or API key",
   "forbidden": "Access denied (403); check repository or API permissions",
@@ -205,5 +205,6 @@
   "connectionFailed": "Connection failed or timed out; check your network and retry",
   "serverUnavailable": "Service temporarily unavailable; retry later",
   "contextFilesTask": "Read these repository files as context first:",
-  "confirmDeletion": "Löschen der Dateien separat bestätigen"
+  "confirmDeletion": "Löschen der Dateien separat bestätigen",
+  "automaticBudgetHint": "Kontext und Antwortlänge werden je nach Modus automatisch verwaltet. Keine Budgeteingabe nötig; große Ergebnisse werden in Abschnitten gelesen."
 }
