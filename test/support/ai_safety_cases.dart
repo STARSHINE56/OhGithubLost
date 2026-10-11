@@ -78,6 +78,9 @@ class FakeGithub {
       if (path == '/repos/owner/repo') {
         return {'full_name': 'owner/repo', 'default_branch': 'main'};
       }
+      if (path == '/user/repos') {
+        return [{'name': 'repo', 'full_name': 'owner/repo'}, {'name': 'repo', 'full_name': 'other/repo'}];
+      }
       if (path == '/search/repositories') {
         return {
           'total_count': 2,

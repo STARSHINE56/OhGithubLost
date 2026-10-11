@@ -11,6 +11,9 @@ on:
       - 'pubspec.*'
       - 'tool/**'
       - '.github/workflows/preview.yml'
+  pull_request:
+    branches: [main]
+    paths: ['lib/**', 'assets/**', 'pubspec.*', 'tool/**', '.github/workflows/preview.yml']
   workflow_dispatch:
 permissions:
   contents: read

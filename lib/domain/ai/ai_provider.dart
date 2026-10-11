@@ -14,6 +14,20 @@ typedef AiHttpSend = Future<Map<String, dynamic>> Function(
 class AiProvider {
   AiProvider(this.http);
   final AiHttpSend http;
+  Future<Map<String, dynamic>> streaming(
+    AiSettings config,
+    String key,
+    Map<String, Object?> body,
+    void Function(String) onText,
+    AiCancellation cancel,
+    AiHttpSend transport,
+  ) async {
+    cancel.check();
+    final result = await AiProvider(transport)
+        .request(config, 'chat/completions', key, body);
+    cancel.check();
+    return result;
+  }
 
   /// 服务地址必须由用户在设置里明确选择；禁止把凭据嵌入 URL。
   static void validate(AiSettings config) {
@@ -72,8 +86,8 @@ class AiProvider {
         } else {
           all.addAll(
             (result['data'] as List? ?? []).whereType<Map>().map(
-              (e) => Map<String, dynamic>.from(e),
-            ),
+                  (e) => Map<String, dynamic>.from(e),
+                ),
           );
           if (config.kind != 'anthropic' || result['has_more'] != true) {
             return {'data': all};
@@ -93,9 +107,25 @@ class AiProvider {
     if (config.kind == 'openai') {
       // 部分推理模型不接受 max_tokens；统一使用较新的输出预算参数。
       final payload = {...body};
-      if (Uri.parse(base).host == 'api.openai.com') {
-        payload['max_completion_tokens'] = payload.remove('max_tokens');
+      final parameter = config.outputParameter == 'auto'
+          ? (Uri.parse(base).host == 'api.openai.com'
+              ? 'max_completion_tokens'
+              : 'max_tokens')
+          : config.outputParameter;
+      final budget = payload.remove('max_tokens');
+      if (parameter != 'none') {
+        payload[parameter] = budget;
       }
+      if ((payload['tools'] as List?)?.isEmpty == true) {
+        payload.remove('tools');
+      }
+      if (config.structured) {
+        payload['response_format'] = {'type': 'json_object'};
+      }
+      if (config.reasoningEffort.isNotEmpty) {
+        payload['reasoning_effort'] = config.reasoningEffort;
+      }
+
       return http(
         '$base/chat/completions',
         headers,
@@ -150,7 +180,7 @@ class AiProvider {
         'max_tokens': body['max_tokens'],
         'system': system,
         'messages': messages,
-        'tools': (body['tools'] as List).map((e) {
+        'tools': (body['tools'] as List? ?? []).map((e) {
           final fn = (e as Map)['function'] as Map;
           return {
             'name': fn['name'],
@@ -160,12 +190,20 @@ class AiProvider {
         }).toList(),
       });
       final parts = result['content'] as List? ?? [];
+      final u = result['usage'] as Map?;
       return {
+        if (u != null)
+          'usage': {
+            'prompt_tokens': u['input_tokens'],
+            'completion_tokens': u['output_tokens'],
+            'prompt_tokens_details': {
+              'cached_tokens': u['cache_read_input_tokens'] ?? 0,
+            },
+          },
         'choices': [
           {
-            'finish_reason': result['stop_reason'] == 'max_tokens'
-                ? 'length'
-                : 'stop',
+            'finish_reason':
+                result['stop_reason'] == 'max_tokens' ? 'length' : 'stop',
             'message': {
               'role': 'assistant',
               '_provider_parts': parts,
@@ -245,7 +283,7 @@ class AiProvider {
       'generationConfig': {'maxOutputTokens': body['max_tokens']},
       'tools': [
         {
-          'functionDeclarations': (body['tools'] as List).map((e) {
+          'functionDeclarations': (body['tools'] as List? ?? []).map((e) {
             final fn = (e as Map)['function'] as Map;
             return {
               'name': fn['name'],
@@ -263,12 +301,20 @@ class AiProvider {
     final candidate = candidates.first as Map;
     final parts = (candidate['content'] as Map?)?['parts'] as List? ?? [];
     var sequence = 0;
+    final u = result['usageMetadata'] as Map?;
     return {
+      if (u != null)
+        'usage': {
+          'prompt_tokens': u['promptTokenCount'],
+          'completion_tokens': u['candidatesTokenCount'],
+          'prompt_tokens_details': {
+            'cached_tokens': u['cachedContentTokenCount'] ?? 0,
+          },
+        },
       'choices': [
         {
-          'finish_reason': candidate['finishReason'] == 'MAX_TOKENS'
-              ? 'length'
-              : 'stop',
+          'finish_reason':
+              candidate['finishReason'] == 'MAX_TOKENS' ? 'length' : 'stop',
           'message': {
             'role': 'assistant',
             '_provider_parts': parts,
@@ -281,17 +327,16 @@ class AiProvider {
                 .whereType<Map>()
                 .where((e) => e['functionCall'] is Map)
                 .map((e) {
-                  final fn = e['functionCall'] as Map;
-                  return {
-                    'id': 'gemini_${sequence++}',
-                    'type': 'function',
-                    'function': {
-                      'name': fn['name'],
-                      'arguments': jsonEncode(fn['args'] ?? {}),
-                    },
-                  };
-                })
-                .toList(),
+              final fn = e['functionCall'] as Map;
+              return {
+                'id': 'gemini_${sequence++}',
+                'type': 'function',
+                'function': {
+                  'name': fn['name'],
+                  'arguments': jsonEncode(fn['args'] ?? {}),
+                },
+              };
+            }).toList(),
           },
         },
       ],
