@@ -88,7 +88,7 @@ Map<String, Future<void> Function()> aiUpgradeCases() => {
               };
             },
             provider: (_, endpoint, key, body) async {
-              if (++requests == 1)
+              if (++requests == 1) {
                 return {
                   'choices': [
                     {
@@ -109,6 +109,7 @@ Map<String, Future<void> Function()> aiUpgradeCases() => {
                     }
                   ]
                 };
+              }
               require(jsonEncode(body).contains('正常介绍'),
                   'Actual mutation result was not returned to model');
               return {
