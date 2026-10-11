@@ -208,5 +208,9 @@
   "confirmDeletion": "单独确认删除以下文件",
   "automaticBudgetHint": "应用会根据所选模式自动管理上下文和回复长度，无需填写预算。较大的工具结果会按需分段读取。",
   "update_repository": "修改仓库介绍",
-  "conflict": "仓库介绍已被其他操作更改，请重新生成预览"
+  "conflict": "仓库介绍已被其他操作更改，请重新生成预览",
+  "notificationsTokenUnsupported": "GitHub 通知接口不支持当前的细粒度或 GitHub App Token。可打开网页通知，或通过现有登录入口使用支持通知权限的经典 Token。仓库和 AI 功能仍可继续使用。",
+  "notificationsPermission": "当前授权无权访问 GitHub 通知（403）。经典 Token 需要 notifications 或 repo 权限；也可打开网页通知。",
+  "notificationsAuthorize": "切换或更新账号授权",
+  "notificationsWeb": "打开 GitHub 网页通知"
 }

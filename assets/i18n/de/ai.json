@@ -208,5 +208,9 @@
   "confirmDeletion": "Löschen der Dateien separat bestätigen",
   "automaticBudgetHint": "Kontext und Antwortlänge werden je nach Modus automatisch verwaltet. Keine Budgeteingabe nötig; große Ergebnisse werden in Abschnitten gelesen.",
   "update_repository": "Repository-Beschreibung ändern",
-  "conflict": "Beschreibung geändert; Vorschau aktualisieren"
+  "conflict": "Beschreibung geändert; Vorschau aktualisieren",
+  "notificationsTokenUnsupported": "GitHub-Benachrichtigungen unterstützen dieses Fine-grained- oder GitHub-App-Token nicht. Öffnen Sie die Webansicht oder melden Sie sich mit einem Classic-Token mit Benachrichtigungszugriff an. Repository- und KI-Funktionen bleiben verfügbar.",
+  "notificationsPermission": "Kein Benachrichtigungszugriff (403). Ein Classic-Token benötigt notifications oder repo. Die Webansicht ist ebenfalls verfügbar.",
+  "notificationsAuthorize": "Kontoautorisierung wechseln oder aktualisieren",
+  "notificationsWeb": "GitHub-Webbenachrichtigungen öffnen"
 }

@@ -208,5 +208,9 @@
   "confirmDeletion": "單獨確認刪除下列檔案",
   "automaticBudgetHint": "應用程式會依所選模式自動管理上下文與回覆長度，無需填寫預算。較大的工具結果會按需分段讀取。",
   "update_repository": "修改儲存庫介紹",
-  "conflict": "儲存庫介紹已被其他操作變更，請重新產生預覽"
+  "conflict": "儲存庫介紹已被其他操作變更，請重新產生預覽",
+  "notificationsTokenUnsupported": "GitHub 通知介面不支援目前的細粒度或 GitHub App Token。可開啟網頁通知，或透過現有登入入口使用支援通知權限的經典 Token。儲存庫與 AI 功能仍可使用。",
+  "notificationsPermission": "目前授權無權存取 GitHub 通知（403）。經典 Token 需要 notifications 或 repo 權限；也可開啟網頁通知。",
+  "notificationsAuthorize": "切換或更新帳號授權",
+  "notificationsWeb": "開啟 GitHub 網頁通知"
 }

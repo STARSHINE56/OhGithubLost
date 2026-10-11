@@ -466,6 +466,28 @@ class DomainLayerModule extends OgLModule {
         store: base.disk.kv,
         github: githubRequest,
         account: ghAuth.activeAccountId,
+        notificationAccess: (id) async {
+          final token = await ghAuth.tokenFor(id);
+          if (token == null) {
+            throw const AiException('loginRequired');
+          }
+          if (token.notificationsUnsupported) {
+            throw const AiException('notificationsTokenUnsupported');
+          }
+        },
+        scopedGithub: (id, method, path, body, query) async {
+          try {
+            return await githubRequest(method, path, body, query,
+                expectedAccountId: id);
+          } on GhAuthException catch (error) {
+            if (error.statusCode == 403 &&
+                (path == '/notifications' ||
+                    path.startsWith('/notifications/'))) {
+              throw const AiException('notificationsPermission');
+            }
+            rethrow;
+          }
+        },
       ),
       auth: ghAuth,
       api: context.di.resolve<GhApi>(),

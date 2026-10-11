@@ -19,6 +19,7 @@ import 'package:ohgithublost/domain/ix/ix_download.dart';
 import 'package:ohgithublost/domain/ix/ix_notify.dart';
 import 'package:ohgithublost/domain/ix/ix_session.dart';
 import 'package:ohgithublost/domain/ix/ix_task.dart';
+import 'package:ohgithublost/domain/productivity/productivity_service.dart';
 import 'package:ohgithublost/domain/sys/sys_access.dart';
 import 'package:ohgithublost/domain/sys/sys_info.dart';
 import 'package:ohgithublost/kernel/contract/disk_store.dart';
@@ -27,6 +28,8 @@ import 'package:ohgithublost/surface/i18n/og_l_i18n.dart';
 import 'package:ohgithublost/surface/pages/ai_chat_page.dart';
 import 'package:ohgithublost/surface/pages/ai_confirmation.dart';
 import 'package:ohgithublost/surface/pages/ai_settings_page.dart';
+import 'package:ohgithublost/surface/pages/github_notifications_page.dart';
+import 'package:ohgithublost/surface/pages/login_page.dart';
 import 'package:ohgithublost/surface/settings.dart';
 import 'package:ohgithublost/surface/surface_bridge.dart';
 
@@ -43,7 +46,8 @@ class _UnusedDownloadBackend implements IxDownloadBackend {
 
 Future<SurfaceBridge> bridge(
     {AiProviderStreamRequest? streamProvider,
-    AiProviderRequest? provider}) async {
+    AiProviderRequest? provider,
+    AiGithubRequest? notificationGithub}) async {
   final store = InMemoryKv(), vault = InMemoryVault();
   final auth = GhAuthService(vault: vault, store: store);
   await auth.saveAccount(const GhAccount(id: 'alice', login: 'alice'),
@@ -71,6 +75,16 @@ Future<SurfaceBridge> bridge(
       downloads: downloads,
       sysInfo: SysInfoService(),
       sysAccess: SysAccessGuard(store: store),
+      productivity: ProductivityService(
+          store: store,
+          account: auth.activeAccountId,
+          notificationAccess: (id) async {
+            final token = await auth.tokenFor(id);
+            if (token?.notificationsUnsupported == true) {
+              throw const AiException('notificationsTokenUnsupported');
+            }
+          },
+          github: notificationGithub ?? (_, path, body, query) async => []),
       ai: ai);
   final settings =
       OgLSettingsController(persistence: OgLInMemorySettingsPersistence());
@@ -85,6 +99,104 @@ void main() {
     OgLI18n.instance.debugInject('zh', {
       'ai': {for (final e in raw.entries) '${e.key}': '${e.value}'}
     });
+  });
+  for (final size in [const Size(390, 844), const Size(844, 390)]) {
+    testWidgets(
+        'Unsupported notifications explain authorization without an empty inbox at $size',
+        (tester) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      var requests = 0;
+      final surface =
+          await bridge(notificationGithub: (_, path, body, query) async {
+        requests++;
+        return [];
+      });
+      await surface.domain.auth.saveAccount(
+          const GhAccount(id: 'alice', login: 'alice'),
+          const GhToken('github_pat_fake_only'));
+      await tester.pumpWidget(MaterialApp(
+          builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context)
+                  .copyWith(textScaler: TextScaler.linear(1.6)),
+              child: child!),
+          home: GithubNotificationsPage(surface: surface)));
+      await tester.pumpAndSettle();
+      expect(
+          find.text(aiText('notificationsTokenUnsupported')), findsOneWidget);
+      expect(find.text(aiText('noNotifications')), findsNothing);
+      expect(find.text(aiText('loadMore')), findsNothing);
+      expect(find.text(aiText('retry')), findsNothing);
+      expect(requests, 0);
+      final authorize = find.text(aiText('notificationsAuthorize'));
+      await tester.ensureVisible(authorize);
+      expect(find.text(aiText('notificationsWeb')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.tap(authorize);
+      await tester.pumpAndSettle();
+      expect(find.byType(LoginPage), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets(
+      'Failed notifications show a retry and become empty only after a successful response',
+      (tester) async {
+    var requests = 0, fail = true;
+    final surface =
+        await bridge(notificationGithub: (_, path, body, query) async {
+      requests++;
+      if (fail) {
+        throw const AiException('serverUnavailable');
+      }
+      return [];
+    });
+    await tester.pumpWidget(
+        MaterialApp(home: GithubNotificationsPage(surface: surface)));
+    await tester.pumpAndSettle();
+    expect(find.text(aiText('noNotifications')), findsNothing);
+    expect(find.text(aiText('loadMore')), findsNothing);
+    fail = false;
+    await tester.tap(find.text(aiText('retry')));
+    await tester.pumpAndSettle();
+    expect(requests, 2);
+    expect(find.text(aiText('noNotifications')), findsOneWidget);
+    expect(find.text(aiText('serverUnavailable')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets('Switching account discards a late private notification response',
+      (tester) async {
+    final pending = Completer<Object?>();
+    late SurfaceBridge surface;
+    Map<String, Object?> item(String name) => {
+          'id': '123',
+          'subject': {'title': name},
+          'repository': {'full_name': '$name/repo'},
+          'reason': 'mention',
+          'updated_at': 'now'
+        };
+    surface = await bridge(notificationGithub: (_, path, body, query) async {
+      if (await surface.domain.auth.activeAccountId() == 'alice') {
+        return pending.future;
+      }
+      return [item('bob')];
+    });
+    await tester.pumpWidget(
+        MaterialApp(home: GithubNotificationsPage(surface: surface)));
+    await tester.pump();
+    await tester.pump();
+    await surface.domain.auth.saveAccount(
+        const GhAccount(id: 'bob', login: 'bob'),
+        const GhToken('ghp_bob_fake'));
+    await surface.domain.auth.switchTo('bob');
+    await tester.pumpAndSettle();
+    expect(find.text('bob'), findsOneWidget);
+    pending.complete([item('alice-private')]);
+    await tester.pumpAndSettle();
+    expect(find.text('bob'), findsOneWidget);
+    expect(find.text('alice-private'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
   for (final scale in [1.0, 1.6]) {
     testWidgets(

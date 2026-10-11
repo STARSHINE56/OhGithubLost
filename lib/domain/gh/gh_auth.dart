@@ -71,6 +71,13 @@ class GhToken {
       value.startsWith('ghr_') ||
       value.startsWith('github_pat_');
 
+  /// GitHub Notifications REST 不支持细粒度 PAT 或 GitHub App 访问令牌。
+  /// 只返回能力信息，不向展示层传递密钥。
+  bool get notificationsUnsupported =>
+      value.startsWith('github_pat_') ||
+      value.startsWith('ghu_') ||
+      value.startsWith('ghs_');
+
   /// **只暴露脱敏形态**。
   @override
   String toString() => 'GhToken($masked)';
@@ -96,9 +103,7 @@ class GhAccount {
         avatarUrl:
             json['avatarUrl'] is String ? json['avatarUrl'] as String : null,
         scopes: json['scopes'] is List
-            ? (json['scopes'] as List<Object?>)
-                .whereType<String>()
-                .toList()
+            ? (json['scopes'] as List<Object?>).whereType<String>().toList()
             : const <String>[],
         addedAt: json['addedAt'] is String
             ? DateTime.tryParse(json['addedAt'] as String)

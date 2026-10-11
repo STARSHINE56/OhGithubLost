@@ -208,5 +208,9 @@
   "confirmDeletion": "Confirm file deletion separately",
   "automaticBudgetHint": "Context and reply length are managed automatically for the selected mode. No budget entry is needed; large tool results are read in smaller ranges.",
   "update_repository": "Update repository description",
-  "conflict": "Repository description changed; refresh the preview"
+  "conflict": "Repository description changed; refresh the preview",
+  "notificationsTokenUnsupported": "GitHub notifications do not support this fine-grained or GitHub App token. Open web notifications or use the existing sign-in flow with a classic token permitted to access notifications. Repository and AI features remain available.",
+  "notificationsPermission": "Current authorization cannot access notifications (403). A classic token needs notifications or repo scope; web notifications are also available.",
+  "notificationsAuthorize": "Switch or update account authorization",
+  "notificationsWeb": "Open GitHub web notifications"
 }

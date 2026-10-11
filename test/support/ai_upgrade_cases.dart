@@ -9,10 +9,101 @@ import '../../lib/domain/ai/ai_context.dart';
 import '../../lib/domain/ai/ai_models.dart';
 import '../../lib/domain/ai/ai_provider.dart';
 import '../../lib/domain/ai/ai_service.dart';
+import '../../lib/domain/productivity/productivity_service.dart';
 import '../../lib/kernel/contract/disk_store.dart';
 import 'ai_safety_cases.dart' show require, rejects;
 
 Map<String, Future<void> Function()> aiUpgradeCases() => {
+      'Unavailable notification authorization blocks requests without faking an empty inbox':
+          () async {
+        var requests = 0;
+        final service = ProductivityService(
+            store: InMemoryKv(),
+            account: () async => 'alice',
+            notificationAccess: (_) async {
+              throw const AiException('notificationsTokenUnsupported');
+            },
+            github: (_, path, body, query) async {
+              requests++;
+              return [];
+            });
+        await rejects(() async {
+          await service.notifications();
+        }, 'notificationsTokenUnsupported');
+        await rejects(
+            () => service.markRead('123'), 'notificationsTokenUnsupported');
+        require(requests == 0, 'Unsupported notifications still hit the API');
+      },
+      'Notification pagination and read operations bind to the selected account':
+          () async {
+        var account = 'alice';
+        final requests = <String>[];
+        final service = ProductivityService(
+            store: InMemoryKv(),
+            account: () async => account,
+            github: (_, path, body, query) async {
+              throw StateError('Unbound request');
+            },
+            scopedGithub: (id, method, path, body, query) async {
+              requests.add('$id:$method:$path');
+              if (method == 'GET') {
+                require(
+                    query['page'] == '2' &&
+                        query['all'] == 'true' &&
+                        query['per_page'] == '50',
+                    'Pagination flags lost');
+                return [
+                  {'id': '123', 'owner': id}
+                ];
+              }
+              return {};
+            });
+        require(
+            (await service.notifications(page: 2, all: true)).single['owner'] ==
+                'alice',
+            'Wrong account');
+        await service.markRead('123');
+        account = 'bob';
+        require(
+            (await service.notifications(page: 2, all: true)).single['owner'] ==
+                'bob',
+            'Account switch was ignored');
+        require(
+            requests.join('|') ==
+                'alice:GET:/notifications|alice:PATCH:/notifications/threads/123|bob:GET:/notifications',
+            'Scoped API requests changed');
+      },
+      'Account changes during permission checks or notification responses are rejected':
+          () async {
+        var account = 'alice', requests = 0;
+        final before = ProductivityService(
+            store: InMemoryKv(),
+            account: () async => account,
+            notificationAccess: (_) async {
+              account = 'bob';
+            },
+            github: (_, path, body, query) async {
+              requests++;
+              return [];
+            });
+        await rejects(() async {
+          await before.notifications();
+        }, 'accountChanged');
+        require(requests == 0, 'A switched account used the wrong credential');
+        account = 'alice';
+        final after = ProductivityService(
+            store: InMemoryKv(),
+            account: () async => account,
+            github: (_, path, body, query) async {
+              account = 'bob';
+              return [
+                {'private': 'alice'}
+              ];
+            });
+        await rejects(() async {
+          await after.notifications();
+        }, 'accountChanged');
+      },
       'Provider output defaults omit unused limits and keep required Messages parameters':
           () async {
         for (final kind in ['openai', 'anthropic', 'gemini']) {
