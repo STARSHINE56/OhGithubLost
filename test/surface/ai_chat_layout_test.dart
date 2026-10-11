@@ -135,6 +135,29 @@ void main() {
     expect(tester.takeException(), isNull);
   });
   testWidgets(
+      'Leaving settings immediately persists a pending manual model change',
+      (tester) async {
+    final surface = await bridge();
+    await tester.pumpWidget(MaterialApp(
+        home: Builder(
+            builder: (context) => Scaffold(
+                body: TextButton(
+                    onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                            builder: (_) => AiSettingsPage(surface: surface))),
+                    child: const Text('settings'))))));
+    await tester.tap(find.text('settings'));
+    await tester.pumpAndSettle();
+    final model = find.widgetWithText(TextField, aiText('model'));
+    await tester.ensureVisible(model);
+    await tester.enterText(model, 'manual-model');
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect((await surface.aiSettings()).model, 'manual-model');
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
       'Landscape keyboard constrains multiline input at large font scale',
       (tester) async {
     tester.view.physicalSize = const Size(844, 390);

@@ -142,7 +142,9 @@ class _AiChatPageState extends State<AiChatPage> {
     if (_sending || _chat == null || text.isEmpty) {
       return;
     }
-    _input.clear();
+    if (preset == null) {
+      _input.clear();
+    }
     _focus.requestFocus();
     _cancel = AiCancellation();
     final epoch = _loadEpoch;
@@ -820,7 +822,14 @@ class _AiChatPageState extends State<AiChatPage> {
                                                         .error))),
                                         TextButton(
                                             onPressed: _configure,
-                                            child: Text(aiText('settings')))
+                                            child: Text(aiText('settings'))),
+                                        if (!_sending &&
+                                            _chat?.messages.isNotEmpty == true)
+                                          TextButton(
+                                              onPressed: () => _edit(
+                                                  _chat!.messages.length - 1,
+                                                  regenerate: true),
+                                              child: Text(aiText('retry'))),
                                       ])),
                                 if (!compact && _chat?.usage.isNotEmpty == true)
                                   Padding(
