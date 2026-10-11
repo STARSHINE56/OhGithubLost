@@ -146,6 +146,186 @@ Future<AiProposal> proposal(AiService ai) => ai.prepareFiles(chat(), [
 ], 'Update files');
 
 Map<String, Future<void> Function()> aiSafetyCases() => {
+  'Cancellation ends a multi-tool turn without executing remaining writes':
+      () async {
+        final gh = FakeGithub();
+        var chats = 0;
+        final ai = service(
+          gh,
+          provider: (config, endpoint, key, body) async {
+            if (endpoint == 'models') {
+              return {
+                'data': [
+                  {'id': 'detected-model'},
+                ],
+              };
+            }
+            chats++;
+            return {
+              'choices': [
+                {
+                  'finish_reason': 'tool_calls',
+                  'message': {
+                    'role': 'assistant',
+                    'content': null,
+                    'tool_calls': [
+                      for (final id in ['first', 'second'])
+                        {
+                          'id': id,
+                          'type': 'function',
+                          'function': {
+                            'name': 'create_issue',
+                            'arguments': jsonEncode({'title': id}),
+                          },
+                        },
+                    ],
+                  },
+                },
+              ],
+            };
+          },
+        );
+        await ai.saveSettings(const AiSettings(enabled: true), key: 'AI_KEY');
+        final conversation = chat();
+        var confirmations = 0;
+        await ai.send(conversation, 'Create two issues', (_) async {
+          confirmations++;
+          return false;
+        });
+        require(confirmations == 1 && chats == 1, 'Cancellation was retried');
+        require(gh.writes.isEmpty, 'A cancelled turn wrote to GitHub');
+        require(
+          conversation.messages.last.notice &&
+              conversation.messages.last.content == 'cancelled',
+          'Cancellation was not visible',
+        );
+      },
+  'Build completion belongs to the initiating conversation and is delivered once':
+      () async {
+        final vault = InMemoryVault();
+        var complete = false;
+        final ai = AiService(
+          store: InMemoryKv(),
+          vault: vault,
+          account: () async => 'alice',
+          provider: (config, endpoint, key, body) async => {},
+          github: (method, path, body, query) async {
+            if (path.endsWith('/dispatches')) {
+              return {};
+            }
+            if (path.endsWith('/artifacts')) {
+              return {
+                'artifacts': [
+                  {'id': 9, 'name': 'Android', 'expired': false},
+                ],
+              };
+            }
+            return {
+              'workflow_runs': complete
+                  ? [
+                      {
+                        'id': 2,
+                        'status': 'completed',
+                        'conclusion': 'success',
+                        'name': 'Build',
+                        'created_at': DateTime.now().toUtc().toIso8601String(),
+                      },
+                    ]
+                  : [
+                      {'id': 1},
+                    ],
+            };
+          },
+        );
+        final first = chat();
+        await ai.saveConversation(first);
+        final other = AiConversation(
+          id: 'other',
+          accountId: 'alice',
+          repo: first.repo,
+          branch: first.branch,
+        );
+        await ai.saveConversation(other);
+        await ai.executeProposal(
+          AiProposal(
+            conversationId: first.id,
+            operation: 'dispatch_workflow',
+            accountId: 'alice',
+            repo: first.repo,
+            branch: first.branch,
+            payload: {'workflow_id': 3},
+          ),
+          (_) async => true,
+        );
+        complete = true;
+        require((await ai.pollBuilds()).length == 1, 'Completion was lost');
+        final conversations = await ai.conversations();
+        require(
+          conversations.singleWhere((e) => e.id == 'other').messages.isEmpty,
+          'Build delivered to wrong chat',
+        );
+        final message = conversations
+            .singleWhere((e) => e.id == first.id)
+            .messages
+            .last;
+        require(
+          message.content == 'buildReady' &&
+              message.artifacts.single['id'] == 9,
+          'Real artifact missing',
+        );
+        require((await ai.pollBuilds()).isEmpty, 'Completion duplicated');
+      },
+  'Notification subjects cannot redirect GitHub credentials to another host or repository':
+      () async {
+        final gh = FakeGithub();
+        final service = ProductivityService(
+          store: InMemoryKv(),
+          github: gh.request,
+          account: () async => gh.user,
+        );
+        for (final url in [
+          'https://evil.example/repos/owner/repo/issues/1',
+          'https://api.github.com/repos/other/repo/issues/1',
+          'https://api.github.com/repos/owner/repo/issues/1?token=x',
+        ]) {
+          await rejects(() async {
+            await service.notificationSubject('owner/repo', url);
+          }, 'invalidResponse');
+        }
+        require(gh.calls.isEmpty, 'Invalid subject URL requested');
+      },
+  'Repository watches keep a baseline, report new commits once and respect opt-out':
+      () async {
+        var commit = 'one';
+        final service = ProductivityService(
+          store: InMemoryKv(),
+          account: () async => 'alice',
+          github: (method, path, body, query) async {
+            if (path.endsWith('/commits')) {
+              return [
+                {'sha': commit},
+              ];
+            }
+            if (path.endsWith('/releases')) {
+              return [];
+            }
+            return {'default_branch': 'main'};
+          },
+        );
+        await service.setWatch('owner/repo', true);
+        require(
+          (await service.pollUpdates()).isEmpty,
+          'Baseline notified as a change',
+        );
+        commit = 'two';
+        require(
+          (await service.pollUpdates()).single['commit'] == true,
+          'New commit not detected',
+        );
+        require((await service.pollUpdates()).isEmpty, 'Update notified twice');
+        await service.setWatch('owner/repo', false);
+        require((await service.watches()).isEmpty, 'Watch not removed');
+      },
   'API keys remain encrypted and isolated by provider URL': () async {
     final gh = FakeGithub(), kv = InMemoryKv(), vault = InMemoryVault();
     final ai = service(gh, store: kv, vault: vault);
