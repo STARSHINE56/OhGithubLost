@@ -45,6 +45,7 @@ Future<SurfaceBridge> bridge() async {
   final auth = GhAuthService(vault: vault, store: store);
   await auth.saveAccount(const GhAccount(id: 'alice', login: 'alice'),
       const GhToken('ghp_fake_test'));
+  await auth.switchTo('alice');
   final client = GhClient(
       net: NetBridge(transport: ScriptedTransport([]), observer: NetObserver()),
       auth: auth);

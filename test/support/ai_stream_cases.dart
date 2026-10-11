@@ -9,6 +9,41 @@ import '../../lib/domain/ai/ai_provider.dart';
 import 'ai_safety_cases.dart' show require;
 
 Map<String, Future<void> Function()> aiStreamCases() => {
+      'Missing native usage fields never become actual zero-token billing':
+          () async {
+        final provider = AiProvider((url, headers, body) async => {
+              'candidates': [
+                {
+                  'content': {
+                    'parts': [
+                      {'text': 'ok'}
+                    ]
+                  },
+                  'finishReason': 'STOP'
+                }
+              ],
+              'usageMetadata': {'promptTokenCount': 20}
+            });
+        final response = await provider.request(
+            const AiSettings(kind: 'gemini', baseUrl: 'https://example.com'),
+            'chat/completions',
+            'KEY', {
+          'model': 'custom',
+          'messages': [
+            {'role': 'user', 'content': 'hello'}
+          ],
+          'max_tokens': 100
+        });
+        require(response['usage']['completion_tokens'] == null,
+            'Missing usage became an actual zero');
+        final decoder = AiSseDecoder();
+        decoder.add(
+            '{"candidates":[{"content":{"parts":[{"text":"ok"}]},"finishReason":"STOP"}]}');
+        decoder.add(
+            '{"usageMetadata":{"promptTokenCount":20,"candidatesTokenCount":5}}');
+        require(decoder.result()['usageMetadata']['candidatesTokenCount'] == 5,
+            'Trailing Gemini usage lost');
+      },
       'OpenAI fragmented tools and final usage survive SSE': () async {
         final text = <String>[];
         final decoder = AiSseDecoder(onText: text.add);

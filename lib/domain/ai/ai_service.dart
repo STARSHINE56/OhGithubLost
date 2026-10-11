@@ -248,7 +248,11 @@ class AiService {
   }
 
   Future<Map<String, dynamic>> usageStats() async {
-    final raw = await _vault.readSecret('ai.usage.${await _account()}');
+    final id = await account();
+    if (id == null || id.isEmpty) {
+      return {};
+    }
+    final raw = await _vault.readSecret('ai.usage.$id');
     return raw == null ? {} : Map<String, dynamic>.from(jsonDecode(raw) as Map);
   }
 

@@ -197,9 +197,10 @@ class AiProvider {
         if (result['_streamed'] == true) '_streamed': true,
         if (u != null)
           'usage': {
-            'prompt_tokens': (u['input_tokens'] as num? ?? 0) +
-                (u['cache_read_input_tokens'] as num? ?? 0) +
-                (u['cache_creation_input_tokens'] as num? ?? 0),
+            if (u['input_tokens'] is num)
+              'prompt_tokens': (u['input_tokens'] as num) +
+                  (u['cache_read_input_tokens'] as num? ?? 0) +
+                  (u['cache_creation_input_tokens'] as num? ?? 0),
             'completion_tokens': u['output_tokens'],
             'prompt_tokens_details': {
               'cached_tokens': u['cache_read_input_tokens'] ?? 0,
@@ -319,8 +320,9 @@ class AiProvider {
       if (u != null)
         'usage': {
           'prompt_tokens': u['promptTokenCount'],
-          'completion_tokens': (u['candidatesTokenCount'] as num? ?? 0) +
-              (u['thoughtsTokenCount'] as num? ?? 0),
+          if (u['candidatesTokenCount'] is num)
+            'completion_tokens': (u['candidatesTokenCount'] as num) +
+                (u['thoughtsTokenCount'] as num? ?? 0),
           'prompt_tokens_details': {
             'cached_tokens': u['cachedContentTokenCount'] ?? 0,
           },

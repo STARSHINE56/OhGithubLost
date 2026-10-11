@@ -166,13 +166,13 @@ class AiSseDecoder {
       }
       return;
     }
-    if (value['candidates'] is List) {
+    if (value['candidates'] is List || value['usageMetadata'] is Map) {
       _kind = 'gemini';
       if (value['usageMetadata'] is Map) {
         _usage = Map<String, dynamic>.from(value['usageMetadata'] as Map);
       }
       for (final candidate
-          in (value['candidates'] as List).take(1).whereType<Map>()) {
+          in (value['candidates'] as List? ?? []).take(1).whereType<Map>()) {
         for (final part
             in ((candidate['content'] as Map?)?['parts'] as List? ?? [])
                 .whereType<Map>()) {

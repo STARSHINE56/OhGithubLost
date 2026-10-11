@@ -191,8 +191,10 @@ class AiContext {
     AiSettings config,
   ) {
     final usage = response['usage'] as Map?;
-    final actual =
-        usage?['prompt_tokens'] is num && usage?['completion_tokens'] is num;
+    final actual = usage?['prompt_tokens'] is num &&
+        usage?['completion_tokens'] is num &&
+        (usage!['prompt_tokens'] as num) >= 0 &&
+        (usage['completion_tokens'] as num) >= 0;
     final incoming = actual ? (usage!['prompt_tokens'] as num).toInt() : input;
     final outgoing = actual
         ? (usage!['completion_tokens'] as num).toInt()
