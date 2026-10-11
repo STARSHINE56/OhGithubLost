@@ -180,21 +180,26 @@ class AiProvider {
         'max_tokens': body['max_tokens'],
         'system': system,
         'messages': messages,
-        'tools': (body['tools'] as List? ?? []).map((e) {
-          final fn = (e as Map)['function'] as Map;
-          return {
-            'name': fn['name'],
-            'description': fn['description'],
-            'input_schema': fn['parameters'],
-          };
-        }).toList(),
+        if (body['stream'] == true) 'stream': true,
+        if ((body['tools'] as List? ?? []).isNotEmpty)
+          'tools': (body['tools'] as List? ?? []).map((e) {
+            final fn = (e as Map)['function'] as Map;
+            return {
+              'name': fn['name'],
+              'description': fn['description'],
+              'input_schema': fn['parameters'],
+            };
+          }).toList(),
       });
       final parts = result['content'] as List? ?? [];
       final u = result['usage'] as Map?;
       return {
+        if (result['_streamed'] == true) '_streamed': true,
         if (u != null)
           'usage': {
-            'prompt_tokens': u['input_tokens'],
+            'prompt_tokens': (u['input_tokens'] as num? ?? 0) +
+                (u['cache_read_input_tokens'] as num? ?? 0) +
+                (u['cache_creation_input_tokens'] as num? ?? 0),
             'completion_tokens': u['output_tokens'],
             'prompt_tokens_details': {
               'cached_tokens': u['cache_read_input_tokens'] ?? 0,
@@ -273,26 +278,33 @@ class AiProvider {
       }
     }
     final model = Uri.encodeComponent(body['model'] as String);
-    final result = await http('$base/models/$model:generateContent', headers, {
+    final suffix = body['stream'] == true
+        ? 'streamGenerateContent?alt=sse'
+        : 'generateContent';
+    final result = await http('$base/models/$model:$suffix', headers, {
       'systemInstruction': {
         'parts': [
           {'text': system},
         ],
       },
       'contents': contents,
-      'generationConfig': {'maxOutputTokens': body['max_tokens']},
-      'tools': [
-        {
-          'functionDeclarations': (body['tools'] as List? ?? []).map((e) {
-            final fn = (e as Map)['function'] as Map;
-            return {
-              'name': fn['name'],
-              'description': fn['description'],
-              'parametersJsonSchema': fn['parameters'],
-            };
-          }).toList(),
-        },
-      ],
+      'generationConfig': {
+        'maxOutputTokens': body['max_tokens'],
+        if (config.structured) 'responseMimeType': 'application/json'
+      },
+      if ((body['tools'] as List? ?? []).isNotEmpty)
+        'tools': [
+          {
+            'functionDeclarations': (body['tools'] as List? ?? []).map((e) {
+              final fn = (e as Map)['function'] as Map;
+              return {
+                'name': fn['name'],
+                'description': fn['description'],
+                'parametersJsonSchema': fn['parameters'],
+              };
+            }).toList(),
+          },
+        ],
     });
     final candidates = result['candidates'] as List? ?? [];
     if (candidates.isEmpty) {
@@ -303,10 +315,12 @@ class AiProvider {
     var sequence = 0;
     final u = result['usageMetadata'] as Map?;
     return {
+      if (result['_streamed'] == true) '_streamed': true,
       if (u != null)
         'usage': {
           'prompt_tokens': u['promptTokenCount'],
-          'completion_tokens': u['candidatesTokenCount'],
+          'completion_tokens': (u['candidatesTokenCount'] as num? ?? 0) +
+              (u['thoughtsTokenCount'] as num? ?? 0),
           'prompt_tokens_details': {
             'cached_tokens': u['cachedContentTokenCount'] ?? 0,
           },

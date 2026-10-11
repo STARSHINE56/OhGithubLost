@@ -42,67 +42,14 @@ class AiHttpTransport {
           // 不回显服务端文本（其中可能含凭据或反射的请求体）。
           throw HttpException('AI HTTP ${response.statusCode}');
         }
-        if (body?['stream'] == true &&
-            response.headers.contentType?.mimeType == 'text/event-stream') {
-          final content = StringBuffer();
-          final calls = <int, Map<String, dynamic>>{};
-          Map<String, dynamic>? usage;
-          String finish = '';
-          var size = 0;
-          var completed = false;
+        if (response.headers.contentType?.mimeType == 'text/event-stream') {
+          final decoder = AiSseDecoder(onText: onText);
           final data = <String>[];
+          var size = 0;
           void event() {
-            if (data.isEmpty) {
-              return;
-            }
-            final raw = data.join('\n');
-            data.clear();
-            if (raw == '[DONE]') {
-              completed = true;
-              return;
-            }
-            final value = jsonDecode(raw) as Map;
-            if (value['error'] != null) {
-              throw const FormatException('invalidResponse');
-            }
-            if (value['usage'] is Map) {
-              usage = Map<String, dynamic>.from(value['usage'] as Map);
-            }
-            final choices = value['choices'] as List? ?? [];
-            if (choices.isEmpty) {
-              return;
-            }
-            final choice = choices.first as Map;
-            if (choice['finish_reason'] != null) {
-              finish = '${choice['finish_reason']}';
-            }
-            final delta = choice['delta'] as Map? ?? {};
-            final text = delta['content'];
-            if (text is String) {
-              content.write(text);
-              onText?.call(content.toString());
-            }
-            for (final rawCall in delta['tool_calls'] as List? ?? []) {
-              final c = rawCall as Map;
-              final index = c['index'] as int;
-              final saved = calls.putIfAbsent(
-                index,
-                () => {
-                  'id': '',
-                  'type': 'function',
-                  'function': <String, dynamic>{'name': '', 'arguments': ''},
-                },
-              );
-              if (c['id'] is String) {
-                saved['id'] = c['id'];
-              }
-              final f = c['function'] as Map? ?? {},
-                  target = saved['function'] as Map;
-              for (final field in ['name', 'arguments']) {
-                if (f[field] is String) {
-                  target[field] = '${target[field]}${f[field]}';
-                }
-              }
+            if (data.isNotEmpty) {
+              decoder.add(data.join('\n'));
+              data.clear();
             }
           }
 
@@ -123,23 +70,7 @@ class AiHttpTransport {
             }
           }
           event();
-          if (!completed && finish.isEmpty) {
-            throw const FormatException('streamInterrupted');
-          }
-          return {
-            '_streamed': true,
-            'choices': [
-              {
-                'finish_reason': finish,
-                'message': {
-                  'role': 'assistant',
-                  'content': content.toString(),
-                  if (calls.isNotEmpty) 'tool_calls': calls.values.toList(),
-                },
-              },
-            ],
-            if (usage != null) 'usage': usage,
-          };
+          return decoder.result();
         }
         final bytes = <int>[];
         await for (final chunk in response) {
@@ -158,5 +89,187 @@ class AiHttpTransport {
       bindCancel?.call(null);
       client.close(force: true);
     }
+  }
+}
+
+/// 三种协议共享 SSE 解码器；只有完整结束事件才允许编排工具。
+class AiSseDecoder {
+  AiSseDecoder({this.onText});
+  final void Function(String)? onText;
+  final _content = StringBuffer();
+  final _calls = <int, Map<String, dynamic>>{};
+  final _blocks = <int, Map<String, dynamic>>{};
+  final _parts = <Map<String, dynamic>>[];
+  Map<String, dynamic>? _usage;
+  String _kind = 'openai', _finish = '';
+  bool _done = false;
+  void _text(String text) {
+    _content.write(text);
+    onText?.call(_content.toString());
+  }
+
+  void add(String raw) {
+    if (raw == '[DONE]') {
+      _done = true;
+      return;
+    }
+    final value = jsonDecode(raw) as Map;
+    if (value['error'] != null || value['type'] == 'error') {
+      throw const FormatException('invalidResponse');
+    }
+    if (value['type'] is String) {
+      _kind = 'anthropic';
+      final type = value['type'];
+      if (type == 'message_start') {
+        _usage = Map<String, dynamic>.from(
+            (value['message'] as Map)['usage'] as Map? ?? {});
+      }
+      if (type == 'content_block_start') {
+        final block = Map<String, dynamic>.from(value['content_block'] as Map);
+        _blocks[value['index'] as int] = block;
+        if (block['type'] == 'text' &&
+            (block['text'] as String? ?? '').isNotEmpty) {
+          _text(block['text'] as String);
+        }
+      }
+      if (type == 'content_block_delta') {
+        final delta = value['delta'] as Map, index = value['index'] as int;
+        final block = _blocks[index];
+        if (block == null) {
+          throw const FormatException('invalidResponse');
+        }
+        if (delta['type'] == 'text_delta') {
+          final text = delta['text'] as String;
+          block['text'] = '${block['text'] ?? ''}$text';
+          _text(text);
+        }
+        if (delta['type'] == 'input_json_delta') {
+          block['_json'] = '${block['_json'] ?? ''}${delta['partial_json']}';
+        }
+        if (delta['type'] == 'thinking_delta') {
+          block['thinking'] = '${block['thinking'] ?? ''}${delta['thinking']}';
+        }
+        if (delta['type'] == 'signature_delta') {
+          block['signature'] =
+              '${block['signature'] ?? ''}${delta['signature']}';
+        }
+      }
+      if (type == 'message_delta') {
+        _finish = '${(value['delta'] as Map)['stop_reason'] ?? ''}';
+        _usage = {
+          ...?_usage,
+          ...Map<String, dynamic>.from(value['usage'] as Map? ?? {})
+        };
+      }
+      if (type == 'message_stop') {
+        _done = true;
+      }
+      return;
+    }
+    if (value['candidates'] is List) {
+      _kind = 'gemini';
+      if (value['usageMetadata'] is Map) {
+        _usage = Map<String, dynamic>.from(value['usageMetadata'] as Map);
+      }
+      for (final candidate
+          in (value['candidates'] as List).take(1).whereType<Map>()) {
+        for (final part
+            in ((candidate['content'] as Map?)?['parts'] as List? ?? [])
+                .whereType<Map>()) {
+          _parts.add(Map<String, dynamic>.from(part));
+          if (part['text'] is String && part['thought'] != true) {
+            _text(part['text'] as String);
+          }
+        }
+        if (candidate['finishReason'] is String) {
+          _finish = candidate['finishReason'] as String;
+          _done = true;
+        }
+      }
+      return;
+    }
+    if (value['usage'] is Map) {
+      _usage = Map<String, dynamic>.from(value['usage'] as Map);
+    }
+    final choices = value['choices'] as List? ?? [];
+    if (choices.isEmpty) {
+      return;
+    }
+    final choice = choices.first as Map;
+    if (choice['finish_reason'] != null) {
+      _finish = '${choice['finish_reason']}';
+    }
+    final delta = choice['delta'] as Map? ?? {};
+    if (delta['content'] is String) {
+      _text(delta['content'] as String);
+    }
+    for (final rawCall in delta['tool_calls'] as List? ?? []) {
+      final c = rawCall as Map, index = c['index'] as int;
+      final saved = _calls.putIfAbsent(
+          index,
+          () => {
+                'id': '',
+                'type': 'function',
+                'function': <String, dynamic>{'name': '', 'arguments': ''}
+              });
+      if (c['id'] is String) {
+        saved['id'] = c['id'];
+      }
+      final fn = c['function'] as Map? ?? {}, target = saved['function'] as Map;
+      for (final field in ['name', 'arguments']) {
+        if (fn[field] is String) {
+          target[field] = '${target[field]}${fn[field]}';
+        }
+      }
+    }
+  }
+
+  Map<String, dynamic> result() {
+    if (!_done && _finish.isEmpty) {
+      throw const FormatException('streamInterrupted');
+    }
+    if (_kind == 'anthropic') {
+      if (!_done) {
+        throw const FormatException('streamInterrupted');
+      }
+      for (final block in _blocks.values) {
+        final raw = block.remove('_json');
+        if (raw != null) {
+          block['input'] = jsonDecode(raw as String);
+        }
+      }
+      return {
+        '_streamed': true,
+        'content': _blocks.values.toList(),
+        'stop_reason': _finish,
+        if (_usage != null) 'usage': _usage
+      };
+    }
+    if (_kind == 'gemini') {
+      return {
+        '_streamed': true,
+        'candidates': [
+          {
+            'finishReason': _finish,
+            'content': {'parts': _parts}
+          }
+        ],
+        if (_usage != null) 'usageMetadata': _usage
+      };
+    }
+    return {
+      '_streamed': true,
+      'choices': [
+        {
+          'finish_reason': _finish,
+          'message': {
+            'role': 'assistant',
+            'content': _content.toString(),
+            if (_calls.isNotEmpty) 'tool_calls': _calls.values.toList()
+          }
+        }
+      ],
+      if (_usage != null) 'usage': _usage
+    };
   }
 }

@@ -29,7 +29,8 @@ class AiService {
   final _cache = <String, ({DateTime at, Object? value})>{};
   String? _cacheAccount;
   Future<Object?> github(String method, String path, Map<String, Object?>? body,
-      Map<String, String> query) async {
+      Map<String, String> query,
+      {bool fresh = false}) async {
     final id = await _account();
     if (_cacheAccount != id) {
       _cache.clear();
@@ -41,7 +42,8 @@ class AiService {
     final immutable = RegExp(r'^[a-f0-9]{40}$').hasMatch(query['ref'] ?? '');
     final ttl =
         immutable ? const Duration(hours: 12) : const Duration(seconds: 30);
-    if (method == 'GET' &&
+    if (!fresh &&
+        method == 'GET' &&
         !path.contains('/git/ref/') &&
         config.cache &&
         cached != null &&
@@ -153,7 +155,15 @@ class AiService {
     if (models.isEmpty) {
       throw const AiException('noModels');
     }
+    await _store.write('ai.models.${value.keyId}', jsonEncode(models));
     return models;
+  }
+
+  Future<List<String>> cachedModels(AiSettings config) async {
+    final raw = await _store.read('ai.models.${config.keyId}');
+    return raw == null
+        ? []
+        : (jsonDecode(raw) as List).whereType<String>().toList();
   }
 
   /// 私有代码也可能出现在历史里，因此历史与审计均保存在加密保险库。
@@ -296,6 +306,10 @@ class AiService {
       cancel.check();
       final model =
           config.model.isEmpty ? (await detectModels()).first : config.model;
+      if (config.model.isEmpty) {
+        await saveSettings(
+            AiSettings.fromJson({...config.toJson(), 'model': model}));
+      }
 
       // 在本地识别明确的仓库切换命令；只给仓库短名时搜索并要求唯一匹配。
       final command = RegExp(
@@ -323,6 +337,7 @@ class AiService {
           'content':
               '''You are OGL's GitHub assistant. Reply in the user's language.
 Current GitHub account ID: ${chat.accountId}. Current repository: ${chat.repo}; branch: ${chat.branch}.
+${config.structured ? 'Respond with a JSON object. Use tool calls for external facts.' : ''}
 No repository is required for current_user, list_my_repositories, search_my_repositories or list_accessible_organizations.
 For 'my repositories' call list_my_repositories with current app authorization. Resolve a short repo name using switch_repository.
 Prefer existing context, locate paths before reading, prefer diffs, never traverse all files without purpose.
@@ -341,7 +356,12 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
         ...AiContext.history(chat, config),
       ];
       var toolCount = 0, consumed = 0;
-      final tools = availableTools(config, task: text);
+      final tools = availableTools(config,
+          task: chat.messages.reversed
+              .where((e) => e.role == 'user')
+              .take(4)
+              .map((e) => e.content)
+              .join('\n'));
       for (var step = 0; step < 12; step++) {
         await _checkAccount(chat.accountId);
         cancel.check();
@@ -356,19 +376,31 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
           'model': model,
           'messages': messages,
           if (tools.isNotEmpty) 'tools': tools,
-          'stream': config.streaming &&
-              config.kind == 'openai' &&
-              streamProvider != null,
+          'stream': config.streaming && streamProvider != null,
           'max_tokens': config.outputTokens,
         };
-        final Map<String, dynamic> response;
-        if (streamProvider != null) {
-          response = await streamProvider!(config, key, body, (value) {
-            partial = AiContext.clean(value).replaceAll(key, '[REDACTED]');
-            onText?.call(partial);
-          }, cancel);
-        } else {
-          response = await provider(config, 'chat/completions', key, body);
+        late Map<String, dynamic> response;
+        for (var attempt = 0;; attempt++) {
+          try {
+            if (streamProvider != null) {
+              response = await streamProvider!(config, key, body, (value) {
+                partial = AiContext.clean(value).replaceAll(key, '[REDACTED]');
+                onText?.call(partial);
+              }, cancel);
+            } else {
+              response = await provider(config, 'chat/completions', key, body);
+            }
+            break;
+          } catch (e) {
+            cancel.check();
+            if (attempt != 0 ||
+                partial.isNotEmpty ||
+                !['rateLimit', 'serverUnavailable'].contains(errorCode(e))) {
+              rethrow;
+            }
+            await Future<void>.delayed(const Duration(milliseconds: 700));
+            cancel.check();
+          }
         }
         cancel.check();
         await _checkAccount(chat.accountId);
@@ -505,6 +537,12 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
     if (text.contains('400') || text.contains('422')) {
       return 'incompatibleApi';
     }
+    if (text.contains('TimeoutException') || text.contains('SocketException')) {
+      return 'connectionFailed';
+    }
+    if (RegExp(r'\b50[0234]\b').hasMatch(text)) {
+      return 'serverUnavailable';
+    }
     return 'requestFailed';
   }
 
@@ -614,10 +652,15 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
           'stream': kind == 'streaming',
           ...extra
         };
+        final probeConfig = AiSettings.fromJson({
+          ...config.toJson(),
+          'structured': kind == 'structured',
+          'reasoningEffort': ''
+        });
         final response = kind == 'streaming' && streamProvider != null
             ? await streamProvider!(
-                config, secret, body, (_) {}, AiCancellation())
-            : await provider(config, 'chat/completions', secret, body);
+                probeConfig, secret, body, (_) {}, AiCancellation())
+            : await provider(probeConfig, 'chat/completions', secret, body);
         final choices = response['choices'] as List? ?? [];
         final message =
             choices.isEmpty ? null : (choices.first as Map)['message'] as Map?;
@@ -625,6 +668,10 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
             (kind != 'streaming' || response['_streamed'] == true) &&
             (kind != 'tools' ||
                 (message['tool_calls'] as List? ?? []).isNotEmpty);
+        if (kind == 'structured') {
+          result[kind] =
+              message != null && jsonDecode('${message['content']}') is Map;
+        }
       } catch (e) {
         result[kind] = false;
         result['${kind}Error'] = errorCode(e);
@@ -636,10 +683,13 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
       await probe('tools', {
         'tools': [_schema('ogl_probe', 'Capability check.', {})]
       });
-      if (config.kind == 'openai' && streamProvider != null) {
+      if (streamProvider != null) {
         await probe('streaming', {});
       } else {
         result['streaming'] = false;
+      }
+      if (config.kind != 'anthropic') {
+        await probe('structured', {});
       }
     }
     await _store.write(
@@ -757,14 +807,31 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
             (file['size'] as num? ?? 0) > 150000) {
           throw const AiException('fileTooLarge');
         }
+        final content = utf8.decode(base64Decode(
+            (file['content'] as String).replaceAll(RegExp(r'\s'), '')));
+        final lines = content.split('\n');
+        final config = await settings();
+        final start = (args['start_line'] as int? ?? 1).clamp(1, lines.length);
+        final maxLines = !config.optimize || args['full'] == true
+            ? lines.length
+            : config.optimization == 'economy'
+                ? 80
+                : config.optimization == 'quality'
+                    ? 500
+                    : 200;
+        final end = (args['end_line'] as int? ?? start + maxLines - 1)
+            .clamp(start, lines.length);
         return {
           'path': path,
           'sha': file['sha'],
-          'content': utf8.decode(
-            base64Decode(
-              (file['content'] as String).replaceAll(RegExp(r'\s'), ''),
-            ),
-          ),
+          'content': start == 1 && end == lines.length
+              ? content
+              : lines.sublist(start - 1, end).join('\n'),
+          'start_line': start,
+          'end_line': end,
+          'total_lines': lines.length,
+          'complete': start == 1 && end == lines.length,
+          if (end < lines.length) 'next_start_line': end + 1,
         };
       case 'search_code':
         final query = args['query'] as String;
@@ -1256,7 +1323,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
   ) async {
     Map<String, Object?>? before;
     if (method == 'PATCH') {
-      final original = await github('GET', path, null, {}) as Map;
+      final original = await github('GET', path, null, {}, fresh: true) as Map;
       before = {for (final key in body.keys) key: original[key]};
     }
     await _checkAccount(proposal.accountId);
@@ -1331,7 +1398,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
       return {'cancelled': true};
     }
     await _checkAccount(user);
-    final current = await github('GET', path, null, {}) as Map;
+    final current = await github('GET', path, null, {}, fresh: true) as Map;
     final after = entry['after'] as Map;
     if (after.keys.any((key) => current[key] != after[key])) {
       throw const AiException('headChanged');
@@ -1650,13 +1717,23 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
       'Read a small UTF-8 file; credentials are blocked.',
       {
         'path': {'type': 'string'},
+        'start_line': {'type': 'integer'},
+        'end_line': {'type': 'integer'},
       },
       ['path'],
     ),
-    _schema('list_issues', 'Read Issues.', {}),
-    _schema('list_pulls', 'Read PRs.', {}),
-    _schema('list_workflows', 'List Actions workflows.', {}),
-    _schema('list_runs', 'List recent workflow runs.', {}),
+    _schema('list_issues', 'Read Issues.', {
+      'page': {'type': 'integer'}
+    }),
+    _schema('list_pulls', 'Read PRs.', {
+      'page': {'type': 'integer'}
+    }),
+    _schema('list_workflows', 'List Actions workflows.', {
+      'page': {'type': 'integer'}
+    }),
+    _schema('list_runs', 'List recent workflow runs.', {
+      'page': {'type': 'integer'}
+    }),
     _schema(
       'run_status',
       'Read build status and downloadable artifacts.',

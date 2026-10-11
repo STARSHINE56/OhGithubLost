@@ -47,6 +47,14 @@ class AiContext {
 
   /// 只缩减上一轮的普通消息；当前工具调用及其响应由编排器保持成组。
   static List<Map<String, Object?>> history(AiConversation chat, AiSettings c) {
+    if (!c.optimize) {
+      chat.summary = '';
+      return chat.messages
+          .where((e) => !e.notice)
+          .map((e) =>
+              <String, Object?>{'role': e.role, 'content': clean(e.content)})
+          .toList();
+    }
     final budget = (limit(c) * .5).floor();
     final recent = <AiMessage>[];
     var used = 0;
@@ -77,15 +85,17 @@ class AiContext {
             .take(8),
         ...omitted.reversed.take(4).toList().reversed,
       ];
-      chat.summary = clean(
-        selected
-            .map(
-              (e) =>
-                  '${e.role}: ${e.content.substring(0, e.content.length.clamp(0, 500))}',
-            )
-            .toSet()
-            .join('\n'),
-      );
+      final excerpts = <String>{};
+      var summaryTokens = 0;
+      for (final e in selected) {
+        final excerpt = clean(
+            '${e.role}: ${String.fromCharCodes(e.content.runes.take(e == omitted.first ? 300 : 150))}');
+        final cost = estimate(excerpt);
+        if (summaryTokens + cost <= limit(c) * .15 && excerpts.add(excerpt)) {
+          summaryTokens += cost;
+        }
+      }
+      chat.summary = excerpts.join('\n');
     } else {
       chat.summary = '';
     }

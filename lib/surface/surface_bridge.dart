@@ -71,6 +71,8 @@ class SurfaceBridge {
       domain.ai!.saveSettings(value, key: key, clearKey: clearKey);
   Future<List<String>> aiDetectModels({String? key, AiSettings? config}) =>
       domain.ai!.detectModels(key: key, config: config);
+  Future<List<String>> aiCachedModels(AiSettings config) =>
+      domain.ai!.cachedModels(config);
   Future<Map<String, dynamic>> aiDetectCapabilities(AiSettings config,
           {String? key}) =>
       domain.ai!.detectCapabilities(config, key: key);

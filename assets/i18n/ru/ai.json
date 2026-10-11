@@ -201,5 +201,8 @@
   "create_branch": "Create branch",
   "toolMode_all": "Coding assistant (confirm writes)",
   "toolMode_read": "Read-only analysis",
-  "toolMode_chat": "Text chat"
+  "toolMode_chat": "Text chat",
+  "connectionFailed": "Connection failed or timed out; check your network and retry",
+  "serverUnavailable": "Service temporarily unavailable; retry later",
+  "contextFilesTask": "Read these repository files as context first:"
 }

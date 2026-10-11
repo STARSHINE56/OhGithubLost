@@ -68,6 +68,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
       final value = await widget.surface.aiSettings();
       final saved = await widget.surface.aiHasKey(config: value);
       final caps = await widget.surface.aiCapabilities(value);
+      final models = await widget.surface.aiCachedModels(value);
       if (mounted) {
         setState(() {
           _draft = value.toJson();
@@ -75,6 +76,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
           _model.text = value.model;
           _savedKey = saved;
           _caps = caps;
+          _models = models;
           _loading = false;
         });
       }

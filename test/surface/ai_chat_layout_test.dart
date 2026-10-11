@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ohgithublost/base/net/net_bridge.dart';
 import 'package:ohgithublost/base/net/net_transport.dart';
+import 'package:ohgithublost/base/net/net_types.dart';
 import 'package:ohgithublost/domain/ai/ai_models.dart';
 import 'package:ohgithublost/domain/ai/ai_service.dart';
 import 'package:ohgithublost/domain/domain_bridge.dart';

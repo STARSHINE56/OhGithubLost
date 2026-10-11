@@ -43,6 +43,7 @@ class _AiChatPageState extends State<AiChatPage> {
   AiConversation? _chat;
   List<AiConversation> _history = [];
   bool _loading = true, _sending = false;
+  int _loadEpoch = 0;
   String? _error;
 
   @override
@@ -86,6 +87,7 @@ class _AiChatPageState extends State<AiChatPage> {
   }
 
   Future<void> _load({bool keep = false, bool fresh = false}) async {
+    final epoch = ++_loadEpoch;
     try {
       final settings = await widget.surface.aiSettings();
       final list = await widget.surface.aiConversations();
@@ -107,7 +109,7 @@ class _AiChatPageState extends State<AiChatPage> {
         repo: widget.repo,
         branch: widget.branch,
       );
-      if (mounted) {
+      if (mounted && epoch == _loadEpoch) {
         setState(() {
           _settings = settings;
           _history = list;
@@ -117,7 +119,7 @@ class _AiChatPageState extends State<AiChatPage> {
       }
       _bottom();
     } catch (e) {
-      if (mounted) {
+      if (mounted && epoch == _loadEpoch) {
         setState(() {
           _error = aiError(e);
           _loading = false;
@@ -143,6 +145,7 @@ class _AiChatPageState extends State<AiChatPage> {
     _input.clear();
     _focus.requestFocus();
     _cancel = AiCancellation();
+    final epoch = _loadEpoch;
     _stream.value = '';
     _userShown = false;
     setState(() {
@@ -158,7 +161,7 @@ class _AiChatPageState extends State<AiChatPage> {
             : Future.value(false),
         cancellation: _cancel,
         onText: (value) {
-          if (!mounted) {
+          if (!mounted || epoch != _loadEpoch) {
             return;
           }
           if (!_userShown) {
@@ -179,9 +182,12 @@ class _AiChatPageState extends State<AiChatPage> {
       setState(() {});
       _bottom();
       await request;
-      _history = await widget.surface.aiConversations();
+      final history = await widget.surface.aiConversations();
+      if (epoch == _loadEpoch) {
+        _history = history;
+      }
     } catch (e) {
-      if (mounted) {
+      if (mounted && epoch == _loadEpoch) {
         setState(() {
           _error = aiError(e);
           if (_input.text.isEmpty &&
@@ -390,6 +396,37 @@ class _AiChatPageState extends State<AiChatPage> {
   }
 
   Future<void> _models() async {
+    final models = await widget.surface.aiCachedModels(_settings);
+    if (!mounted) {
+      return;
+    }
+    if (models.isNotEmpty) {
+      final selected = await showDialog<String>(
+          context: context,
+          builder: (context) =>
+              SimpleDialog(title: Text(aiText('model')), children: [
+                for (final id
+                    in {...models, _settings.model}.where((e) => e.isNotEmpty))
+                  SimpleDialogOption(
+                      onPressed: () => Navigator.pop(context, id),
+                      child: Text(id)),
+                SimpleDialogOption(
+                    onPressed: () => Navigator.pop(context, ''),
+                    child: Text(aiText('manualModel'))),
+              ]));
+      if (selected == null || !mounted) {
+        return;
+      }
+      if (selected.isNotEmpty) {
+        final value =
+            AiSettings.fromJson({..._settings.toJson(), 'model': selected});
+        await widget.surface.aiSaveSettings(value);
+        if (mounted) {
+          setState(() => _settings = value);
+        }
+        return;
+      }
+    }
     final input = await _textDialog(aiText('model'), _settings.model);
     if (input == null || input.trim().isEmpty) {
       return;
@@ -458,6 +495,22 @@ class _AiChatPageState extends State<AiChatPage> {
       if (mounted) {
         setState(() => _error = aiError(e));
       }
+    }
+  }
+
+  Future<void> _addContext() async {
+    if (_chat?.repo.isEmpty ?? true) {
+      await _repository();
+    }
+    if (!mounted || (_chat?.repo.isEmpty ?? true)) {
+      return;
+    }
+    final path = await _textDialog(aiText('context'), '');
+    if (path != null && path.trim().isNotEmpty && mounted) {
+      _input.text =
+          '${aiText('contextFilesTask')} ${path.trim()}\n${_input.text}';
+      _input.selection = TextSelection.collapsed(offset: _input.text.length);
+      _focus.requestFocus();
     }
   }
 
@@ -723,18 +776,21 @@ class _AiChatPageState extends State<AiChatPage> {
                                                   return ValueListenableBuilder<
                                                           String>(
                                                       valueListenable: _stream,
-                                                      builder: (_, text, _) => Padding(
-                                                          padding:
-                                                              const EdgeInsets
-                                                                  .all(14),
-                                                          child: text.isEmpty
-                                                              ? Text(aiText(
-                                                                  'working'))
-                                                              : AiMarkdown(
-                                                                  text: text,
-                                                                  fontSize:
-                                                                      _settings
-                                                                          .fontSize)));
+                                                      builder: (context, text,
+                                                              child) =>
+                                                          Padding(
+                                                              padding:
+                                                                  const EdgeInsets
+                                                                      .all(14),
+                                                              child: text.isEmpty
+                                                                  ? Text(aiText(
+                                                                      'working'))
+                                                                  : AiMarkdown(
+                                                                      text:
+                                                                          text,
+                                                                      fontSize:
+                                                                          _settings
+                                                                              .fontSize)));
                                                 }
                                                 return _message(
                                                     _chat!.messages[index],
@@ -816,7 +872,7 @@ class _AiChatPageState extends State<AiChatPage> {
                                                   icon: const Icon(Icons.add),
                                                   onPressed: _sending
                                                       ? null
-                                                      : _repository),
+                                                      : _addContext),
                                               IconButton(
                                                   tooltip: aiText('repository'),
                                                   icon: const Icon(
