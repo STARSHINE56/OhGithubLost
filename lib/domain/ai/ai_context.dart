@@ -195,9 +195,9 @@ class AiContext {
         usage?['completion_tokens'] is num &&
         (usage!['prompt_tokens'] as num) >= 0 &&
         (usage['completion_tokens'] as num) >= 0;
-    final incoming = actual ? (usage!['prompt_tokens'] as num).toInt() : input;
+    final incoming = actual ? (usage['prompt_tokens'] as num).toInt() : input;
     final outgoing = actual
-        ? (usage!['completion_tokens'] as num).toInt()
+        ? (usage['completion_tokens'] as num).toInt()
         : estimate(jsonEncode(response['choices']));
     final cached =
         (usage?['prompt_tokens_details'] as Map?)?['cached_tokens'] as num? ??
