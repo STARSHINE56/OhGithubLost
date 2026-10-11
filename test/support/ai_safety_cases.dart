@@ -247,9 +247,18 @@ Map<String, Future<void> Function()> aiSafetyCases() => {
                   ? [
                       {
                         'id': 2,
+                        'actor': {'id': 'alice'},
                         'status': 'completed',
                         'conclusion': 'success',
                         'name': 'Build',
+                        'created_at': DateTime.now().toUtc().toIso8601String(),
+                      },
+                      {
+                        'id': 3,
+                        'actor': {'id': 'bob'},
+                        'status': 'completed',
+                        'conclusion': 'success',
+                        'name': 'Someone else build',
                         'created_at': DateTime.now().toUtc().toIso8601String(),
                       },
                     ]

@@ -947,6 +947,8 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
             .whereType<Map>()
             .where(
               (e) =>
+                  // PAT 触发的 actor.id 必须是当前账号，不能把他人的运行当成本次编译。
+                  '${(e['actor'] as Map?)?['id']}' == user &&
                   (e['id'] as num) > (tracked['previous'] as num) &&
                   DateTime.parse(e['created_at'] as String).isAfter(
                     DateTime.parse(tracked['created'] as String)

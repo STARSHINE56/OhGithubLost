@@ -4,6 +4,13 @@ name: Preview builds
 on:
   push:
     branches: [main]
+    # 文档或测试单独变化只跑 CI，避免无意义地重复三平台编译。
+    paths:
+      - 'lib/**'
+      - 'assets/**'
+      - 'pubspec.*'
+      - 'tool/**'
+      - '.github/workflows/preview.yml'
   workflow_dispatch:
 permissions:
   contents: read
