@@ -12,6 +12,48 @@ import '../../lib/kernel/contract/disk_store.dart';
 import 'ai_safety_cases.dart' show require, rejects;
 
 Map<String, Future<void> Function()> aiUpgradeCases() => {
+      'Changing configured model credentials invalidates detection caches and preserves history':
+          () async {
+        final ai = AiService(
+            store: InMemoryKv(),
+            vault: InMemoryVault(),
+            account: () async => 'alice',
+            github: (_, path, body, query) async => {},
+            provider: (config, endpoint, key, body) async =>
+                endpoint == 'models'
+                    ? {
+                        'data': [
+                          {'id': 'custom'}
+                        ]
+                      }
+                    : {
+                        'choices': [
+                          {
+                            'message': {
+                              'role': 'assistant',
+                              'content': '{"ok":true}'
+                            }
+                          }
+                        ]
+                      });
+        const config = AiSettings(model: 'custom');
+        await ai.saveSettings(config, key: 'old-model-key');
+        await ai.newConversation();
+        await ai.detectModels();
+        await ai.detectCapabilities(config);
+        await ai.saveSettings(config, key: 'old-model-key');
+        require(
+            (await ai.cachedModels(config)).isNotEmpty &&
+                (await ai.capabilities(config)).isNotEmpty,
+            'Unchanged key discarded useful cache');
+        await ai.saveSettings(config, key: 'new-model-key');
+        require(
+            (await ai.cachedModels(config)).isEmpty &&
+                (await ai.capabilities(config)).isEmpty,
+            'Changed credentials reused stale detection');
+        require((await ai.conversations()).length == 1,
+            'Credential change deleted chat data');
+      },
       'Production GitHub request path receives the conversation account binding':
           () async {
         final ai = AiService(

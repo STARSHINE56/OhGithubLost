@@ -38,7 +38,7 @@ class _AiChatPageState extends State<AiChatPage> {
   AiCancellation? _cancel;
   Timer? _streamTimer;
   String _pending = '', _search = '';
-  bool _userShown = false;
+  bool _userShown = false, _followOutput = true;
 
   AiConversation? _chat;
   List<AiConversation> _history = [];
@@ -131,8 +131,7 @@ class _AiChatPageState extends State<AiChatPage> {
   void _bottom({bool force = true}) =>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scroll.hasClients &&
-            (force ||
-                (_settings.autoScroll && _scroll.position.extentAfter < 160))) {
+            (force || (_settings.autoScroll && _followOutput))) {
           _scroll.jumpTo(_scroll.position.maxScrollExtent);
         }
       });
@@ -150,6 +149,7 @@ class _AiChatPageState extends State<AiChatPage> {
     final epoch = _loadEpoch;
     _stream.value = '';
     _userShown = false;
+    _followOutput = true;
     setState(() {
       _sending = true;
       _error = null;
@@ -204,7 +204,7 @@ class _AiChatPageState extends State<AiChatPage> {
         _streamTimer = null;
         _stream.value = '';
         setState(() => _sending = false);
-        _bottom();
+        _bottom(force: false);
       }
     }
   }
@@ -771,42 +771,60 @@ class _AiChatPageState extends State<AiChatPage> {
                                             child: CircularProgressIndicator())
                                         : _chat?.messages.isEmpty != false
                                             ? _welcome()
-                                            : ListView.builder(
-                                                controller: _scroll,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
+                                            : NotificationListener<
+                                                    UserScrollNotification>(
+                                                onNotification: (notification) {
+                                                  if (notification.depth == 0) {
+                                                    _followOutput = notification
+                                                            .metrics
+                                                            .extentAfter <
+                                                        160;
+                                                  }
+                                                  return false;
+                                                },
+                                                child: ListView.builder(
+                                                    key: const ValueKey(
+                                                        'ai-message-list'),
+                                                    controller: _scroll,
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
                                                         horizontal: 16,
                                                         vertical: 12),
-                                                keyboardDismissBehavior:
-                                                    ScrollViewKeyboardDismissBehavior
-                                                        .onDrag,
-                                                itemCount:
-                                                    _chat!.messages.length +
-                                                        (_sending ? 1 : 0),
-                                                itemBuilder: (context, index) {
-                                                  if (index ==
-                                                      _chat!.messages.length) {
-                                                    return ValueListenableBuilder<
-                                                            String>(
-                                                        valueListenable:
-                                                            _stream,
-                                                        builder: (context, text, child) => Padding(
-                                                            padding:
-                                                                const EdgeInsets
-                                                                    .all(14),
-                                                            child: text.isEmpty
-                                                                ? Text(aiText(
-                                                                    'working'))
-                                                                : AiMarkdown(
-                                                                    text: text,
-                                                                    fontSize:
-                                                                        _settings
-                                                                            .fontSize)));
-                                                  }
-                                                  return _message(
-                                                      _chat!.messages[index],
-                                                      index);
-                                                })),
+                                                    keyboardDismissBehavior:
+                                                        ScrollViewKeyboardDismissBehavior
+                                                            .onDrag,
+                                                    itemCount:
+                                                        _chat!.messages.length +
+                                                            (_sending ? 1 : 0),
+                                                    itemBuilder:
+                                                        (context, index) {
+                                                      if (index ==
+                                                          _chat!.messages
+                                                              .length) {
+                                                        return ValueListenableBuilder<
+                                                                String>(
+                                                            valueListenable:
+                                                                _stream,
+                                                            builder: (context, text, child) => Padding(
+                                                                padding:
+                                                                    const EdgeInsets
+                                                                        .all(
+                                                                        14),
+                                                                child: text
+                                                                        .isEmpty
+                                                                    ? Text(aiText(
+                                                                        'working'))
+                                                                    : AiMarkdown(
+                                                                        text:
+                                                                            text,
+                                                                        fontSize:
+                                                                            _settings.fontSize)));
+                                                      }
+                                                      return _message(
+                                                          _chat!
+                                                              .messages[index],
+                                                          index);
+                                                    }))),
                                 if (_error != null)
                                   Padding(
                                       padding: const EdgeInsets.symmetric(

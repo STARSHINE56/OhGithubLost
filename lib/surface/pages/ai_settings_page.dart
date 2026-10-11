@@ -46,6 +46,9 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   List<String> _models = [];
   Map<String, dynamic> _caps = {};
   Timer? _saveTimer;
+  String? _githubLogin;
+  int _loginEpoch = 0;
+  String? _shownKeyId, _shownCapabilityId;
   static const _presets = {
     'deepseek': ('openai', 'https://api.deepseek.com'),
     'openai': ('openai', 'https://api.openai.com/v1'),
@@ -60,7 +63,24 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   @override
   void initState() {
     super.initState();
+    widget.surface.aiAccountChanges.addListener(_accountChanged);
+    unawaited(_refreshLogin());
     _load();
+  }
+
+  void _accountChanged() => unawaited(_refreshLogin());
+  Future<void> _refreshLogin() async {
+    final epoch = ++_loginEpoch;
+    try {
+      final login = await widget.surface.aiAccountLogin();
+      if (mounted && epoch == _loginEpoch) {
+        setState(() => _githubLogin = login);
+      }
+    } catch (e) {
+      if (mounted && epoch == _loginEpoch) {
+        setState(() => _error = aiError(e));
+      }
+    }
   }
 
   Future<void> _load() async {
@@ -77,6 +97,8 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
           _savedKey = saved;
           _caps = caps;
           _models = models;
+          _shownKeyId = value.keyId;
+          _shownCapabilityId = value.capabilityId;
           _loading = false;
         });
       }
@@ -92,6 +114,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
 
   @override
   void dispose() {
+    widget.surface.aiAccountChanges.removeListener(_accountChanged);
     _saveTimer?.cancel();
     _url.dispose();
     _key.dispose();
@@ -105,6 +128,18 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   }
 
   void _schedule() {
+    final config = _config;
+    if (_shownCapabilityId != config.capabilityId) {
+      setState(() {
+        if (_shownKeyId != config.keyId) {
+          _models = [];
+          _savedKey = false;
+        }
+        _caps = {};
+        _shownKeyId = config.keyId;
+        _shownCapabilityId = config.capabilityId;
+      });
+    }
     _saveTimer?.cancel();
     _saveTimer =
         Timer(const Duration(milliseconds: 700), () => _save(silent: true));
@@ -122,8 +157,17 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
         _key.clear();
       }
       final saved = await widget.surface.aiHasKey(config: config);
-      if (mounted) {
-        setState(() => _savedKey = saved);
+      final models = await widget.surface.aiCachedModels(config);
+      final caps = await widget.surface.aiCapabilities(config);
+      if (mounted && config.capabilityId == _config.capabilityId) {
+        setState(() {
+          _savedKey = saved;
+          _models = models;
+          _caps = caps;
+          _shownKeyId = config.keyId;
+          _shownCapabilityId = config.capabilityId;
+          _error = null;
+        });
         if (!silent) {
           ScaffoldMessenger.of(context)
               .showSnackBar(SnackBar(content: Text(aiText('saved'))));
@@ -349,9 +393,8 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
                               ListTile(
                                   contentPadding: EdgeInsets.zero,
                                   leading: const Icon(Icons.person_outline),
-                                  title: Text(widget.surface.domain.session
-                                          .account?.login ??
-                                      aiText('loginRequired')),
+                                  title: Text(
+                                      _githubLogin ?? aiText('loginRequired')),
                                   subtitle: Text(aiText('accountContext'))),
                               TextFormField(
                                   initialValue: '${_draft['defaultRepo']}',

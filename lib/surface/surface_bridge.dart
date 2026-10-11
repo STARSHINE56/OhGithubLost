@@ -59,6 +59,9 @@ class SurfaceBridge {
   /// AI 与体验功能的展示层门面；页面不直接依赖领域实现。
   bool get hasAi => domain.ai != null;
   bool get isDesktop => ogLIsDesktopPlatform;
+  Listenable get aiAccountChanges => domain.auth;
+  Future<String?> aiAccountLogin() async =>
+      (await domain.auth.activeAccount())?.login;
   Future<Map<String, dynamic>> aiUsageStats() => domain.ai!.usageStats();
   Future<AiSettings> aiSettings() => domain.ai!.settings();
   Future<bool> aiHasKey({AiSettings? config}) =>

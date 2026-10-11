@@ -129,6 +129,18 @@ class AiService {
     if (value.defaultRepo.isNotEmpty) {
       validateRepo(value.defaultRepo);
     }
+    final previousKey = await _vault.readSecret(value.keyId);
+    if (clearKey ||
+        (previousKey != null &&
+            key?.trim().isNotEmpty == true &&
+            key!.trim() != previousKey)) {
+      await _store.remove('ai.models.${value.keyId}');
+      for (final cachedKey in await _store.keys()) {
+        if (cachedKey.startsWith('ai.capabilities.${value.keyId}.')) {
+          await _store.remove(cachedKey);
+        }
+      }
+    }
     if (clearKey) {
       await _vault.deleteSecret(value.keyId);
     }

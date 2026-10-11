@@ -1,6 +1,7 @@
 /// 真实聊天页、全局焦点守卫、手势导航和字体缩放回归。
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -40,7 +41,9 @@ class _UnusedDownloadBackend implements IxDownloadBackend {
       throw UnsupportedError('Downloads are not used in layout tests');
 }
 
-Future<SurfaceBridge> bridge() async {
+Future<SurfaceBridge> bridge(
+    {AiProviderStreamRequest? streamProvider,
+    AiProviderRequest? provider}) async {
   final store = InMemoryKv(), vault = InMemoryVault();
   final auth = GhAuthService(vault: vault, store: store);
   await auth.saveAccount(const GhAccount(id: 'alice', login: 'alice'),
@@ -54,7 +57,8 @@ Future<SurfaceBridge> bridge() async {
       vault: vault,
       account: auth.activeAccountId,
       github: (_, path, body, query) async => {},
-      provider: (_, endpoint, key, body) async => {});
+      provider: provider ?? (_, endpoint, key, body) async => {},
+      streamProvider: streamProvider);
   final downloads = IxDownloadManager(backend: _UnusedDownloadBackend());
   addTearDown(downloads.dispose);
   final domain = DomainBridge(
@@ -117,6 +121,149 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+  for (final automatic in [true, false]) {
+    testWidgets(
+        'Streaming respects user scroll and draft, auto-scroll=$automatic',
+        (tester) async {
+      final completion = Completer<Map<String, dynamic>>();
+      void Function(String)? emit;
+      final surface =
+          await bridge(streamProvider: (config, key, body, onText, cancel) {
+        emit = onText;
+        return completion.future;
+      });
+      await surface.aiSaveSettings(
+          AiSettings(
+              enabled: true,
+              model: 'manual-model',
+              tools: false,
+              autoScroll: automatic),
+          key: 'test-model-key');
+      final chat = await surface.aiNewChat();
+      for (var i = 0; i < 30; i++) {
+        chat.messages.add(AiMessage('user', '历史问题 $i'));
+        chat.messages.add(AiMessage('assistant',
+            '历史回复 $i\n${List.filled(12, '这是历史正文，用于验证长对话滚动与渲染。').join('\n')}'));
+      }
+      await surface.aiSaveChat(chat);
+      await tester.pumpWidget(MaterialApp(home: AiChatPage(surface: surface)));
+      await tester.pumpAndSettle();
+      final input = find.byKey(const ValueKey('ai-input'));
+      await tester.enterText(input, '继续分析');
+      await tester.tap(find.byTooltip(aiText('send')));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(emit, isNotNull);
+      final list = find.byKey(const ValueKey('ai-message-list'));
+      final position = tester
+          .state<ScrollableState>(find
+              .descendant(of: list, matching: find.byType(Scrollable))
+              .first)
+          .position;
+      final before = position.pixels;
+      final chunk =
+          List.filled(14, List.filled(8, '中文流式内容。').join()).join('\n');
+      emit!(chunk);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump();
+      if (automatic) {
+        expect(position.extentAfter, lessThan(1),
+            reason:
+                'Large chunks should follow the end before the user scrolls');
+      } else {
+        expect(position.pixels, closeTo(before, 1));
+        expect(position.extentAfter, greaterThan(160));
+      }
+      await tester.drag(list, const Offset(0, 1200));
+      await tester.pumpAndSettle();
+      expect(position.extentAfter, greaterThan(160));
+      final offset = position.pixels;
+      final history = find.byWidgetPredicate(
+          (widget) => widget is AiMarkdown && widget.text.startsWith('历史回复'));
+      final previous = tester.widget<AiMarkdown>(history.first);
+      await tester.enterText(input, '下一条草稿保留');
+      emit!('$chunk\n后续内容');
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(position.pixels, closeTo(offset, 1));
+      expect(
+          identical(tester.widget<AiMarkdown>(history.first), previous), isTrue,
+          reason: 'Streaming must not rebuild old message widgets');
+      completion.complete({
+        'choices': [
+          {
+            'finish_reason': 'stop',
+            'message': {'role': 'assistant', 'content': '$chunk\n后续内容'}
+          }
+        ],
+        'usage': {'prompt_tokens': 100, 'completion_tokens': 100}
+      });
+      await tester.pumpAndSettle();
+      expect(position.pixels, closeTo(offset, 1),
+          reason: 'Completion must not force the reader to the bottom');
+      expect(tester.widget<TextField>(input).controller!.text, '下一条草稿保留');
+      expect(tester.takeException(), isNull);
+    });
+  }
+  testWidgets(
+      'Settings account follows active authentication without a session snapshot',
+      (tester) async {
+    final surface = await bridge();
+    await tester
+        .pumpWidget(MaterialApp(home: AiSettingsPage(surface: surface)));
+    await tester.pumpAndSettle();
+    final account = find.text('alice');
+    await tester.scrollUntilVisible(account, 200,
+        scrollable: find.byType(Scrollable).first);
+    expect(account, findsOneWidget);
+    await surface.domain.auth.saveAccount(
+        const GhAccount(id: 'bob', login: 'bob'),
+        const GhToken('ghp_fake_bob'));
+    await surface.domain.auth.switchTo('bob');
+    await tester.pumpAndSettle();
+    expect(find.text('bob'), findsOneWidget);
+    expect(find.text('alice'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+  testWidgets(
+      'Changing service or model clears displayed detection for the old configuration',
+      (tester) async {
+    final surface = await bridge(
+        provider: (config, endpoint, key, body) async => endpoint == 'models'
+            ? {
+                'data': [
+                  {'id': 'old-model'}
+                ]
+              }
+            : {
+                'choices': [
+                  {
+                    'message': {'role': 'assistant', 'content': '{"ok":true}'}
+                  }
+                ]
+              });
+    const config = AiSettings(model: 'old-model');
+    await surface.aiSaveSettings(config, key: 'test-model-key');
+    await surface.aiDetectModels();
+    await surface.aiDetectCapabilities(config);
+    await tester
+        .pumpWidget(MaterialApp(home: AiSettingsPage(surface: surface)));
+    await tester.pumpAndSettle();
+    final status = find.textContaining('${aiText('capabilities')}:');
+    await tester.scrollUntilVisible(status, 200,
+        scrollable: find.byType(Scrollable).first);
+    expect(status, findsOneWidget);
+    final model = find.widgetWithText(TextField, aiText('model'));
+    await tester.scrollUntilVisible(model, -200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.enterText(model, 'new-model');
+    await tester.pump();
+    expect(status, findsNothing);
+    final url = find.widgetWithText(TextField, aiText('baseUrl'));
+    await tester.ensureVisible(url);
+    await tester.enterText(url, 'https://new-service.example/v1');
+    await tester.pump(const Duration(milliseconds: 800));
+    expect(find.text('old-model'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('Desktop history sidebar and manual model settings fit',
       (tester) async {
     tester.view.physicalSize = const Size(1280, 800);
