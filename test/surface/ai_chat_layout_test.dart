@@ -325,16 +325,14 @@ void main() {
     expect(find.text(aiText('manualModel')), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
-  testWidgets('Token settings need only a mode, without numeric budget entry',
+  testWidgets('Settings contain no token optimization or quota controls',
       (tester) async {
     final surface = await bridge();
     await tester
         .pumpWidget(MaterialApp(home: AiSettingsPage(surface: surface)));
     await tester.pumpAndSettle();
-    final hint = find.text(aiText('automaticBudgetHint'));
-    await tester.scrollUntilVisible(hint, 200,
-        scrollable: find.byType(Scrollable).first);
-    expect(hint, findsOneWidget);
+    expect(find.text(aiText('tokenOptimization')), findsNothing);
+    expect(find.text(aiText('automaticBudgetHint')), findsNothing);
     for (final name in [
       'contextTokens',
       'taskBudget',

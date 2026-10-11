@@ -113,7 +113,7 @@ class AiProvider {
               : 'max_tokens')
           : config.outputParameter;
       final budget = payload.remove('max_tokens');
-      if (parameter != 'none') {
+      if (parameter != 'none' && budget != null) {
         payload[parameter] = budget;
       }
       if ((payload['tools'] as List?)?.isEmpty == true) {
@@ -177,7 +177,8 @@ class AiProvider {
       }
       final result = await http('$base/messages', headers, {
         'model': body['model'],
-        'max_tokens': body['max_tokens'],
+        // Messages 协议要求该参数；其他协议沿用服务商默认输出长度。
+        'max_tokens': body['max_tokens'] ?? 4096,
         'system': system,
         'messages': messages,
         if (body['stream'] == true) 'stream': true,
@@ -290,7 +291,7 @@ class AiProvider {
       },
       'contents': contents,
       'generationConfig': {
-        'maxOutputTokens': body['max_tokens'],
+        if (body['max_tokens'] != null) 'maxOutputTokens': body['max_tokens'],
         if (config.structured) 'responseMimeType': 'application/json'
       },
       if ((body['tools'] as List? ?? []).isNotEmpty)

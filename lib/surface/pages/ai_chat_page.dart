@@ -863,16 +863,6 @@ class _AiChatPageState extends State<AiChatPage> {
                                                   regenerate: true),
                                               child: Text(aiText('retry'))),
                                       ])),
-                                if (!compact && _chat?.usage.isNotEmpty == true)
-                                  Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 16),
-                                      child: Text(
-                                          '${aiText(_chat!.usage['lastEstimated'] == true ? 'estimated' : 'usage')}: ${_chat!.usage['lastInput']} / ${_chat!.usage['lastOutput']} · ${aiText('total')}: ${_chat!.usage['input']} / ${_chat!.usage['output']}',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .labelSmall,
-                                          maxLines: 2)),
                                 Padding(
                                     padding: const EdgeInsets.fromLTRB(
                                         12, 8, 12, 10),

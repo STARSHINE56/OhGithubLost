@@ -206,5 +206,7 @@
   "serverUnavailable": "Service temporarily unavailable; retry later",
   "contextFilesTask": "Read these repository files as context first:",
   "confirmDeletion": "Отдельно подтвердите удаление файлов",
-  "automaticBudgetHint": "Контекст и длина ответа управляются автоматически по выбранному режиму. Вводить бюджет не нужно; большие результаты читаются частями."
+  "automaticBudgetHint": "Контекст и длина ответа управляются автоматически по выбранному режиму. Вводить бюджет не нужно; большие результаты читаются частями.",
+  "update_repository": "Изменить описание репозитория",
+  "conflict": "Описание изменилось; обновите предпросмотр"
 }

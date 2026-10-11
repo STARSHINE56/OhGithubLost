@@ -15,6 +15,12 @@ on:
     branches: [main]
     paths: ['lib/**', 'assets/**', 'pubspec.*', 'tool/**', '.github/workflows/preview.yml']
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Platforms to build
+        type: choice
+        default: android
+        options: [android, all]
 permissions:
   contents: read
 concurrency:
@@ -28,19 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: android
-            target: apk
-            os: ubuntu-latest
-            artifact: build/app/outputs/flutter-apk/app-debug.apk
-          - platform: windows
-            target: windows
-            os: windows-latest
-            artifact: build/windows/x64/runner/Debug/**
-          - platform: linux
-            target: linux
-            os: ubuntu-22.04
-            artifact: build/linux/x64/debug/bundle/**
+        include: ${{ fromJSON((inputs.platform == 'all' || (github.event_name != 'workflow_dispatch' && github.head_ref != 'feature/ai-assistant-upgrade')) && '[{"platform":"android","target":"apk","os":"ubuntu-latest","artifact":"build/app/outputs/flutter-apk/app-debug.apk"},{"platform":"windows","target":"windows","os":"windows-latest","artifact":"build/windows/x64/runner/Debug/**"},{"platform":"linux","target":"linux","os":"ubuntu-22.04","artifact":"build/linux/x64/debug/bundle/**"}]' || '[{"platform":"android","target":"apk","os":"ubuntu-latest","artifact":"build/app/outputs/flutter-apk/app-debug.apk"}]') }}
     steps:
       - uses: actions/checkout@v4
       - uses: subosito/flutter-action@v2

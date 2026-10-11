@@ -7,12 +7,287 @@ import 'dart:convert';
 import 'dart:io';
 import '../../lib/domain/ai/ai_context.dart';
 import '../../lib/domain/ai/ai_models.dart';
+import '../../lib/domain/ai/ai_provider.dart';
 import '../../lib/domain/ai/ai_service.dart';
 import '../../lib/kernel/contract/disk_store.dart';
 import 'ai_safety_cases.dart' show require, rejects;
 
 Map<String, Future<void> Function()> aiUpgradeCases() => {
-      'Automatic mode ignores stale manual budgets and cumulative conversation usage':
+      'Provider output defaults omit unused limits and keep required Messages parameters':
+          () async {
+        for (final kind in ['openai', 'anthropic', 'gemini']) {
+          final provider = AiProvider((url, headers, body) async {
+            if (kind == 'openai') {
+              require(
+                  !body!.containsKey('max_tokens') &&
+                      !body.containsKey('max_completion_tokens'),
+                  'Null or forced OpenAI output limit');
+              return {
+                'choices': [
+                  {
+                    'message': {'role': 'assistant', 'content': 'ok'}
+                  }
+                ]
+              };
+            }
+            if (kind == 'anthropic') {
+              require(body!['max_tokens'] == 4096,
+                  'Messages required parameter missing');
+              return {
+                'content': [
+                  {'type': 'text', 'text': 'ok'}
+                ],
+                'stop_reason': 'end_turn'
+              };
+            }
+            require(
+                !(body!['generationConfig'] as Map)
+                    .containsKey('maxOutputTokens'),
+                'Forced Gemini output limit');
+            return {
+              'candidates': [
+                {
+                  'content': {
+                    'parts': [
+                      {'text': 'ok'}
+                    ]
+                  },
+                  'finishReason': 'STOP'
+                }
+              ]
+            };
+          });
+          await provider.request(
+              AiSettings(kind: kind, baseUrl: 'https://service.example/v1'),
+              'chat/completions',
+              'KEY', {
+            'model': 'manual',
+            'messages': [
+              {'role': 'user', 'content': 'hello'}
+            ]
+          });
+        }
+      },
+      'Model can update a repository description through the confirmed GitHub tool':
+          () async {
+        var requests = 0, writes = 0, description = '????';
+        final ai = AiService(
+            store: InMemoryKv(),
+            vault: InMemoryVault(),
+            account: () async => 'alice',
+            github: (method, path, body, query) async {
+              require(path == '/repos/alice/repo', 'Wrong API path');
+              if (method == 'PATCH') {
+                writes++;
+                description = body!['description'] as String;
+              }
+              return {
+                'full_name': 'alice/repo',
+                'default_branch': 'main',
+                'description': description
+              };
+            },
+            provider: (_, endpoint, key, body) async {
+              if (++requests == 1)
+                return {
+                  'choices': [
+                    {
+                      'message': {
+                        'role': 'assistant',
+                        'content': '',
+                        'tool_calls': [
+                          {
+                            'id': 'metadata',
+                            'type': 'function',
+                            'function': {
+                              'name': 'update_repository',
+                              'arguments': '{"description":"正常介绍"}'
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                };
+              require(jsonEncode(body).contains('正常介绍'),
+                  'Actual mutation result was not returned to model');
+              return {
+                'choices': [
+                  {
+                    'message': {'role': 'assistant', 'content': 'done'}
+                  }
+                ]
+              };
+            });
+        await ai.saveSettings(const AiSettings(enabled: true, model: 'manual'),
+            key: 'KEY');
+        final chat =
+            await ai.newConversation(repo: 'alice/repo', branch: 'main');
+        await ai.send(chat, '改为正常介绍', (p) async {
+          require(
+              p.operation == 'update_repository' &&
+                  p.files.single.before == '????' &&
+                  p.files.single.after == '正常介绍',
+              'Missing metadata diff');
+          return true;
+        });
+        require(writes == 1 && requests == 2 && description == '正常介绍',
+            'Metadata tool was unavailable or failed');
+      },
+      'Tasks can exceed previous model-round and tool-call quotas': () async {
+        var requests = 0, calls = 0;
+        final ai = AiService(
+            store: InMemoryKv(),
+            vault: InMemoryVault(),
+            account: () async => 'alice',
+            github: (_, path, body, query) async {
+              calls++;
+              return {'login': 'alice'};
+            },
+            provider: (_, endpoint, key, body) async {
+              requests++;
+              return {
+                'choices': [
+                  {
+                    'message': requests <= 20
+                        ? {
+                            'role': 'assistant',
+                            'content': '',
+                            'tool_calls': [
+                              for (var i = 0; i < 2; i++)
+                                {
+                                  'id': '$requests-$i',
+                                  'type': 'function',
+                                  'function': {
+                                    'name': 'current_user',
+                                    'arguments': '{}'
+                                  }
+                                }
+                            ]
+                          }
+                        : {'role': 'assistant', 'content': 'done'}
+                  }
+                ]
+              };
+            });
+        await ai.saveSettings(
+            const AiSettings(
+                enabled: true,
+                model: 'manual',
+                taskBudget: 1024,
+                contextTokens: 1024),
+            key: 'KEY');
+        final chat = await ai.newConversation();
+        await ai.send(chat, '查看账号', (_) async => false);
+        // GitHub GET 允许复用相同账号缓存；模型工具结果仍完整配对。
+        require(
+            requests == 21 &&
+                calls >= 1 &&
+                chat.messages.last.content == 'done',
+            'Old quota still aborts a long task');
+      },
+      'Repository descriptions show a diff and write only after confirmation':
+          () async {
+        var description = 'Android ?????? - ???', writes = 0;
+        final ai = AiService(
+            store: InMemoryKv(),
+            vault: InMemoryVault(),
+            account: () async => 'alice',
+            github: (method, path, body, query) async {
+              require(path == '/repos/alice/repo', 'Wrong repository target');
+              if (method == 'PATCH') {
+                writes++;
+                description = body!['description'] as String;
+              }
+              return {
+                'description': description,
+                'full_name': 'alice/repo',
+                'default_branch': 'main'
+              };
+            },
+            provider: (_, endpoint, key, body) async => {});
+        final chat =
+            await ai.newConversation(repo: 'alice/repo', branch: 'main');
+        Future<Object?> update(AiConfirmation confirm) => ai.executeProposal(
+            AiProposal(
+                operation: 'update_repository',
+                accountId: 'alice',
+                repo: chat.repo,
+                branch: chat.branch,
+                payload: {
+                  'description': '正常介绍'
+                },
+                files: [
+                  AiFileChange(
+                      path: 'description', before: description, after: '正常介绍')
+                ]),
+            confirm);
+        await update((p) async {
+          require(
+              p.files.single.before == description &&
+                  p.files.single.after == '正常介绍',
+              'Preview missing');
+          return false;
+        });
+        require(writes == 0, 'Rejected preview mutated repository');
+        await update((p) async => true);
+        require(writes == 1 && description == '正常介绍',
+            'Confirmed metadata update failed');
+        await rejects(
+            () => update((p) async {
+                  description = 'Changed elsewhere';
+                  return true;
+                }),
+            'conflict');
+        require(writes == 1, 'Stale preview overwrote another change');
+        require(
+            !jsonEncode(AiService.availableTools(
+                    const AiSettings(toolMode: 'read')))
+                .contains('update_repository'),
+            'Read-only permission was bypassed');
+      },
+      'Unrestricted long tool tasks can still be cancelled': () async {
+        var requests = 0;
+        final cancellation = AiCancellation();
+        final ai = AiService(
+            store: InMemoryKv(),
+            vault: InMemoryVault(),
+            account: () async => 'alice',
+            github: (_, path, body, query) async => {'login': 'alice'},
+            provider: (_, endpoint, key, body) async {
+              if (++requests == 15) cancellation.cancel();
+              return {
+                'choices': [
+                  {
+                    'message': {
+                      'role': 'assistant',
+                      'content': '',
+                      'tool_calls': [
+                        {
+                          'id': '$requests',
+                          'type': 'function',
+                          'function': {
+                            'name': 'current_user',
+                            'arguments': '{}'
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              };
+            });
+        await ai.saveSettings(const AiSettings(enabled: true, model: 'manual'),
+            key: 'KEY');
+        final chat = await ai.newConversation();
+        await rejects(
+            () => ai.send(chat, '查看账号', (_) async => false,
+                cancellation: cancellation),
+            'cancelled');
+        require(
+            requests == 15, 'Cancellation failed or old round quota remained');
+      },
+      'Saved optimization and tiny budgets cannot restrict normal chat':
           () async {
         var calls = 0;
         final ai = AiService(
@@ -23,8 +298,10 @@ Map<String, Future<void> Function()> aiUpgradeCases() => {
             provider: (config, endpoint, key, body) async {
               calls++;
               require(
-                  config.contextTokens == 32768 && body?['max_tokens'] == 4096,
-                  'Automatic mode kept stale limits');
+                  !config.optimize &&
+                      !config.automaticBudget &&
+                      !body!.containsKey('max_tokens'),
+                  'Removed optimization still limits chat');
               return {
                 'choices': [
                   {
@@ -38,7 +315,10 @@ Map<String, Future<void> Function()> aiUpgradeCases() => {
           'model': 'manual',
           'taskBudget': 1024,
           'contextTokens': 1024,
-          'outputTokens': 128
+          'outputTokens': 128,
+          'optimize': true,
+          'automaticBudget': true,
+          'autoSummary': true
         });
         await ai.saveSettings(old, key: 'KEY');
         final chat = await ai.newConversation();
@@ -46,74 +326,18 @@ Map<String, Future<void> Function()> aiUpgradeCases() => {
         await ai.send(chat, '读取当前仓库', (_) async => false);
         require(calls == 1, 'Historic usage blocked an ordinary request');
       },
-      'Large source tool results fit automatically with valid tool pairs and explicit truncation':
-          () async {
-        final config = AiContext.effectiveSettings(const AiSettings());
-        final messages = <Map<String, Object?>>[
-          {'role': 'system', 'content': 'Use tools safely'},
-          {'role': 'user', 'content': '目标：分析源码，禁止覆盖分支'},
-          {'role': 'assistant', 'content': List.filled(16000, '旧内容').join()},
-          {'role': 'user', 'content': '读取文件'},
-          {
-            'role': 'assistant',
-            'content': '',
-            'tool_calls': [
-              {
-                'id': 'source',
-                'type': 'function',
-                'function': {
-                  'name': 'read_file',
-                  'arguments': '{"path":"app.dart"}'
-                }
-              },
-              {
-                'id': 'info',
-                'type': 'function',
-                'function': {'name': 'repository_info', 'arguments': '{}'}
-              }
-            ]
-          },
-          {
-            'role': 'tool',
-            'tool_call_id': 'source',
-            'content': jsonEncode({
-              'path': 'app.dart',
-              'sha': 'version',
-              'content': List.filled(100000, '源码').join()
-            })
-          },
-          {
-            'role': 'tool',
-            'tool_call_id': 'info',
-            'content': '{"name":"project"}'
-          },
-        ];
-        AiContext.fit(messages, const [], config);
+      'Tool data is not token-truncated while secrets are removed': () async {
+        final content = List.filled(200000, '源码').join();
+        final data = AiContext.compress({
+          'content': content,
+          'files': List.generate(160, (i) => i),
+          'authorization': 'private'
+        }, const AiSettings()) as Map;
         require(
-            AiContext.estimate(jsonEncode(messages)) <= AiContext.limit(config),
-            'Automatic context did not fit');
+            data['content'] == content && (data['files'] as List).length == 160,
+            'Full tool data was token-truncated');
         require(
-            messages
-                    .where((m) => m['role'] == 'tool')
-                    .map((m) => m['tool_call_id'])
-                    .join(',') ==
-                'source,info',
-            'Tool responses were orphaned');
-        require(
-            (messages.firstWhere((m) => m['tool_calls'] != null)['tool_calls']
-                        as List)
-                    .length ==
-                2,
-            'Tool calls were partially truncated');
-        final result = jsonDecode(
-            messages.firstWhere((m) => m['tool_call_id'] == 'source')['content']
-                as String) as Map;
-        require(
-            result['context_truncated'] == true &&
-                (result['data'] as Map)['path'] == 'app.dart',
-            'Partial source was not identified');
-        require(jsonEncode(messages).contains('禁止覆盖分支'),
-            'Automatic fitting lost task constraints');
+            !data.containsKey('authorization'), 'Secret protection removed');
       },
       'Restarted AI service loads its secure key without exposing it in settings or history':
           () async {
@@ -268,8 +492,8 @@ Map<String, Future<void> Function()> aiUpgradeCases() => {
         await ai.saveSettings(const AiSettings(optimization: 'economy'));
         final chat =
             await ai.newConversation(repo: 'alice/repo', branch: 'main');
-        final first =
-            await ai.readTool(chat, 'read_file', {'path': 'file.dart'}) as Map;
+        final first = await ai.readTool(
+            chat, 'read_file', {'path': 'file.dart', 'end_line': 80}) as Map;
         require(
             first['end_line'] == 80 &&
                 first['total_lines'] == 1000 &&
@@ -474,11 +698,12 @@ Map<String, Future<void> Function()> aiUpgradeCases() => {
         }
         final messages = AiContext.history(chat,
             const AiSettings(optimization: 'economy', contextTokens: 6000));
-        require(chat.summary.contains('禁止改变包名'), 'Lost constraint');
+        require(messages.first['content'].toString().contains('禁止改变包名'),
+            'Lost constraint');
         require(messages.last['content'].toString().contains('99'),
             'Lost newest turn');
-        require(AiContext.estimate(jsonEncode(messages)) < 6000,
-            'Context exceeded budget');
+        require(messages.length == chat.messages.length && chat.summary.isEmpty,
+            'Full history was summarized or truncated');
       },
       'Secret redaction and source preservation are independent of economy mode':
           () async {
@@ -544,8 +769,7 @@ Map<String, Future<void> Function()> aiUpgradeCases() => {
             'cancelled');
         require(writes == 0, 'Write after cancellation');
       },
-      'Budget stops requests before incurring additional provider usage':
-          () async {
+      'Legacy fixed budgets no longer block provider requests': () async {
         var calls = 0;
         final ai = AiService(
             store: InMemoryKv(),
@@ -554,7 +778,13 @@ Map<String, Future<void> Function()> aiUpgradeCases() => {
             github: (_, path, body, query) async => {},
             provider: (_, endpoint, key, body) async {
               calls++;
-              return {};
+              return {
+                'choices': [
+                  {
+                    'message': {'role': 'assistant', 'content': 'ok'}
+                  }
+                ]
+              };
             });
         await ai.saveSettings(
             const AiSettings(
@@ -564,9 +794,8 @@ Map<String, Future<void> Function()> aiUpgradeCases() => {
                 automaticBudget: false),
             key: 'KEY');
         final chat = await ai.newConversation();
-        await rejects(
-            () => ai.send(chat, 'hello', (_) async => false), 'budgetExceeded');
-        require(calls == 0, 'Request exceeded budget');
+        await ai.send(chat, 'hello', (_) async => false);
+        require(calls == 1, 'Legacy budget prevented request');
       },
       'Capability detection fails safely and manual overrides remain available':
           () async {

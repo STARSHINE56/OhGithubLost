@@ -206,5 +206,7 @@
   "serverUnavailable": "服务暂时不可用，已有限重试，请稍后再试",
   "contextFilesTask": "请先读取以下仓库文件作为上下文：",
   "confirmDeletion": "单独确认删除以下文件",
-  "automaticBudgetHint": "应用会根据所选模式自动管理上下文和回复长度，无需填写预算。较大的工具结果会按需分段读取。"
+  "automaticBudgetHint": "应用会根据所选模式自动管理上下文和回复长度，无需填写预算。较大的工具结果会按需分段读取。",
+  "update_repository": "修改仓库介绍",
+  "conflict": "仓库介绍已被其他操作更改，请重新生成预览"
 }

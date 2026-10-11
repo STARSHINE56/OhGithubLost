@@ -206,5 +206,7 @@
   "serverUnavailable": "Service temporarily unavailable; retry later",
   "contextFilesTask": "Read these repository files as context first:",
   "confirmDeletion": "Confirm file deletion separately",
-  "automaticBudgetHint": "Context and reply length are managed automatically for the selected mode. No budget entry is needed; large tool results are read in smaller ranges."
+  "automaticBudgetHint": "Context and reply length are managed automatically for the selected mode. No budget entry is needed; large tool results are read in smaller ranges.",
+  "update_repository": "Update repository description",
+  "conflict": "Repository description changed; refresh the preview"
 }

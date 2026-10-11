@@ -451,21 +451,6 @@ class _AiSettingsPageState extends State<AiSettingsPage>
                               _select('toolMode', ['all', 'read', 'chat']),
                               Text(aiText('writeConfirmation')),
                             ]),
-                            _section('tokenOptimization', [
-                              _switch('optimize'),
-                              _select('optimization',
-                                  ['economy', 'balanced', 'quality']),
-                              _switch('autoSummary'),
-                              _switch('cache'),
-                              Text(aiText('automaticBudgetHint')),
-                              FutureBuilder<Map<String, dynamic>>(
-                                  future: widget.surface.aiUsageStats(),
-                                  builder: (context, snapshot) {
-                                    final usage = snapshot.data ?? {};
-                                    return Text(
-                                        '${aiText('total')}: ${usage['input'] ?? 0} / ${usage['output'] ?? 0} · ${aiText('cached')}: ${usage['cached'] ?? 0}${usage['estimated'] == true ? ' (${aiText('estimated')})' : ''}');
-                                  }),
-                            ]),
                             _section('chatExperience', [
                               _switch('autoScroll'),
                               _number('fontSize', decimal: true),

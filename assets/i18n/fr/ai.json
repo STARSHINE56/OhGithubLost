@@ -206,5 +206,7 @@
   "serverUnavailable": "Service temporarily unavailable; retry later",
   "contextFilesTask": "Read these repository files as context first:",
   "confirmDeletion": "Confirmer séparément la suppression des fichiers",
-  "automaticBudgetHint": "Le contexte et les réponses sont gérés automatiquement selon le mode choisi. Aucun budget à saisir ; les grands résultats sont lus par segments."
+  "automaticBudgetHint": "Le contexte et les réponses sont gérés automatiquement selon le mode choisi. Aucun budget à saisir ; les grands résultats sont lus par segments.",
+  "update_repository": "Modifier la description du dépôt",
+  "conflict": "Description modifiée ; actualisez l’aperçu"
 }

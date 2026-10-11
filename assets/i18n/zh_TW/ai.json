@@ -206,5 +206,7 @@
   "serverUnavailable": "Service temporarily unavailable; retry later",
   "contextFilesTask": "Read these repository files as context first:",
   "confirmDeletion": "單獨確認刪除下列檔案",
-  "automaticBudgetHint": "應用程式會依所選模式自動管理上下文與回覆長度，無需填寫預算。較大的工具結果會按需分段讀取。"
+  "automaticBudgetHint": "應用程式會依所選模式自動管理上下文與回覆長度，無需填寫預算。較大的工具結果會按需分段讀取。",
+  "update_repository": "修改儲存庫介紹",
+  "conflict": "儲存庫介紹已被其他操作變更，請重新產生預覽"
 }
