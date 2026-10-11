@@ -21,6 +21,7 @@ import '../base/disk/disk_cache.dart';
 import '../base/disk/disk_store.dart';
 import '../base/disk/og_l_storage.dart';
 import '../base/net/net_bridge.dart';
+import '../domain/ai/ai_context.dart';
 import '../domain/domain_bridge.dart';
 import '../domain/gh/repo_file_service.dart';
 import '../kernel/bridge_registry.dart';
@@ -58,6 +59,7 @@ class SurfaceBridge {
 
   /// AI 与体验功能的展示层门面；页面不直接依赖领域实现。
   bool get hasAi => domain.ai != null;
+  bool aiRequestsJson(String task) => AiContext.requestsJson(task);
   bool get isDesktop => ogLIsDesktopPlatform;
   Listenable get aiAccountChanges => domain.auth;
   Future<String?> aiAccountLogin() async =>

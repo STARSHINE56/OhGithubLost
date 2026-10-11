@@ -157,7 +157,7 @@
   "themeHint": "Light, dark and system appearance use the app theme settings",
   "streaming": "Streaming (when supported)",
   "tools": "Enable tool calling",
-  "structured": "JSON output (requires API support)",
+  "structured": "允許 JSON 格式回覆（僅在明確要求時啟用）",
   "outputParameter": "Output budget parameter",
   "outputParameter_auto": "Protocol default",
   "outputParameter_max_tokens": "max_tokens",

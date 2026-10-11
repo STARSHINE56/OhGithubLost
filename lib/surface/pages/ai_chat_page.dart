@@ -9,6 +9,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../surface_bridge.dart';
 import '../types.dart';
+import '../util/ai_reply_text.dart';
 import '../util/link_opener.dart';
 import '../widgets/code_editor_field.dart';
 import 'ai_confirmation.dart';
@@ -656,7 +657,12 @@ class _AiChatPageState extends State<AiChatPage> {
 
   Widget _message(AiMessage message, int index) {
     final user = message.role == 'user', scheme = Theme.of(context).colorScheme;
-    final text = message.notice ? aiText(message.content) : message.content;
+    final rawJson = _requestsJson(index);
+    final text = message.notice
+        ? aiText(message.content)
+        : user
+            ? message.content
+            : formatAiReply(message.content, preserveJson: rawJson);
     return Align(
         key: ValueKey('${message.at.microsecondsSinceEpoch}:$index'),
         alignment: user ? Alignment.centerRight : Alignment.centerLeft,
@@ -687,8 +693,8 @@ class _AiChatPageState extends State<AiChatPage> {
                     visualDensity: VisualDensity.compact,
                     tooltip: aiText('copy'),
                     icon: const Icon(Icons.copy_outlined, size: 18),
-                    onPressed: () =>
-                        Clipboard.setData(ClipboardData(text: text))),
+                    onPressed: () => Clipboard.setData(
+                        ClipboardData(text: rawJson ? message.content : text))),
                 if (!message.notice)
                   IconButton(
                       visualDensity: VisualDensity.compact,
@@ -700,6 +706,15 @@ class _AiChatPageState extends State<AiChatPage> {
                           : () => _edit(index, regenerate: !user)),
               ]),
             ])));
+  }
+
+  bool _requestsJson(int index) {
+    for (var i = index - 1; i >= 0; i--) {
+      if (_chat!.messages[i].role == 'user') {
+        return widget.surface.aiRequestsJson(_chat!.messages[i].content);
+      }
+    }
+    return false;
   }
 
   @override
@@ -810,15 +825,14 @@ class _AiChatPageState extends State<AiChatPage> {
                                                                     const EdgeInsets
                                                                         .all(
                                                                         14),
-                                                                child: text
-                                                                        .isEmpty
+                                                                child: text.isEmpty
                                                                     ? Text(aiText(
                                                                         'working'))
                                                                     : AiMarkdown(
-                                                                        text:
+                                                                        text: formatAiReply(
                                                                             text,
-                                                                        fontSize:
-                                                                            _settings.fontSize)));
+                                                                            preserveJson: _requestsJson(_chat!.messages.length)),
+                                                                        fontSize: _settings.fontSize)));
                                                       }
                                                       return _message(
                                                           _chat!

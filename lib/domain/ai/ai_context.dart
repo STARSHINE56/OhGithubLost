@@ -6,6 +6,20 @@ import 'dart:convert';
 import 'ai_models.dart';
 
 class AiContext {
+  /// JSON 能力是可用参数，普通聊天不应因此被强制成 JSON。
+  static bool requestsJson(String task) {
+    if (RegExp(
+            r'''(?:不要|不用|别|避免|无需|禁止)\s*(?:以|用|输出|返回)?\s*(?:纯|原始)?\s*JSON\b|\b(?:do not|don't|no|avoid|without)\s+(?:(?:use|return|output|respond|in|as)\s+)*JSON\b''',
+            caseSensitive: false)
+        .hasMatch(task)) {
+      return false;
+    }
+    return RegExp(
+            r'(?:以|用|按(?:照)?)\s*(?:纯|原始|有效|标准)?\s*JSON(?:\s*(?:格式|形式|来?(?:输出|回答|回复|返回|列出))|\s*$)|(?:输出|返回|回答|回复)\s*(?:为|成)?\s*(?:纯|原始|有效|一个)?\s*JSON\b|\b(?:return|output|respond|reply|format|provide)\s+(?:(?:only|a|valid|raw|in|as)\s+)*JSON\b|\bas\s+(?:(?:valid|raw)\s+)?JSON\b|\bJSON\s+only\b',
+            caseSensitive: false)
+        .hasMatch(task);
+  }
+
   static int estimate(String value) {
     var latin = 0, other = 0;
     for (final rune in value.runes) {

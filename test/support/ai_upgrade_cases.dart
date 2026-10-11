@@ -12,6 +12,33 @@ import '../../lib/kernel/contract/disk_store.dart';
 import 'ai_safety_cases.dart' show require, rejects;
 
 Map<String, Future<void> Function()> aiUpgradeCases() => {
+      'JSON-capable models are not forced into JSON for ordinary repository queries':
+          () async {
+        final parameters = <bool>[];
+        final ai = AiService(
+            store: InMemoryKv(),
+            vault: InMemoryVault(),
+            account: () async => 'alice',
+            github: (_, path, body, query) async => {},
+            provider: (config, endpoint, key, body) async {
+              parameters.add(config.structured);
+              return {
+                'choices': [
+                  {
+                    'message': {'role': 'assistant', 'content': 'ok'}
+                  }
+                ]
+              };
+            });
+        await ai.saveSettings(
+            const AiSettings(enabled: true, model: 'manual', structured: true),
+            key: 'test-model-key');
+        final chat = await ai.newConversation();
+        await ai.send(chat, '列出我的所有仓库', (_) async => false);
+        await ai.send(chat, '请用 JSON 格式返回仓库列表', (_) async => false);
+        require(parameters.length == 2 && !parameters.first && parameters.last,
+            'Global JSON capability forced all responses or ignored explicit format');
+      },
       'Changing configured model credentials invalidates detection caches and preserves history':
           () async {
         final ai = AiService(

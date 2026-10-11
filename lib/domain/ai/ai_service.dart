@@ -351,13 +351,16 @@ class AiService {
           'user', AiContext.clean(text).replaceAll(key, '[REDACTED]')));
       await saveConversation(chat);
       onText?.call('');
+      final wantsJson = AiContext.requestsJson(text);
+      final requestConfig = AiSettings.fromJson(
+          {...config.toJson(), 'structured': config.structured && wantsJson});
       final messages = <Map<String, Object?>>[
         {
           'role': 'system',
           'content':
               '''You are OGL's GitHub assistant. Reply in the user's language.
 Current GitHub account ID: ${chat.accountId}. Current repository: ${chat.repo}; branch: ${chat.branch}.
-${config.structured ? 'Respond with a JSON object. Use tool calls for external facts.' : ''}
+${wantsJson ? 'The user requested JSON; preserve that output format.' : 'Use clear natural-language Markdown for the final answer. Present repositories as a concise readable list with names, links and useful descriptions. Do not dump API JSON or its field names into the chat.'}
 No repository is required for current_user, list_my_repositories, search_my_repositories or list_accessible_organizations.
 For 'my repositories' call list_my_repositories with current app authorization. Resolve a short repo name using switch_repository.
 Prefer existing context, locate paths before reading, prefer diffs, never traverse all files without purpose.
@@ -403,12 +406,14 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
         for (var attempt = 0;; attempt++) {
           try {
             if (streamProvider != null) {
-              response = await streamProvider!(config, key, body, (value) {
+              response =
+                  await streamProvider!(requestConfig, key, body, (value) {
                 partial = AiContext.clean(value).replaceAll(key, '[REDACTED]');
                 onText?.call(partial);
               }, cancel);
             } else {
-              response = await provider(config, 'chat/completions', key, body);
+              response =
+                  await provider(requestConfig, 'chat/completions', key, body);
             }
             break;
           } catch (e) {

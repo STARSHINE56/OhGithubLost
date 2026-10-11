@@ -203,6 +203,50 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+  for (final explicitJson in [false, true]) {
+    testWidgets(
+        'Existing repository JSON renders readably and preserves original history, explicit JSON=$explicitJson',
+        (tester) async {
+      final surface = await bridge();
+      final chat = await surface.aiNewChat();
+      final raw = jsonEncode({
+        'message': '以下是你的仓库：',
+        'repositories': [
+          {
+            'full_name': 'STARSHINE56/OhGithubLost',
+            'description': 'GitHub 客户端',
+            'private': false
+          },
+          {
+            'full_name': 'STARSHINE56/StarAssistant',
+            'description': '星辰助手',
+            'private': false
+          }
+        ],
+        'total': 2
+      });
+      chat.messages.add(
+          AiMessage('user', explicitJson ? '请用 JSON 格式返回仓库列表' : '列出我的全部仓库'));
+      chat.messages.add(AiMessage('assistant', raw));
+      await surface.aiSaveChat(chat);
+      await tester.pumpWidget(MaterialApp(home: AiChatPage(surface: surface)));
+      await tester.pumpAndSettle();
+      final rendered = tester.widget<AiMarkdown>(find.byType(AiMarkdown)).text;
+      if (explicitJson) {
+        expect(rendered, startsWith('```json\n'));
+        expect(rendered, contains('"repositories"'));
+      } else {
+        expect(
+            rendered,
+            contains(
+                '[STARSHINE56/StarAssistant](https://github.com/STARSHINE56/StarAssistant) — 星辰助手'));
+        expect(rendered, isNot(contains('"repositories"')));
+      }
+      expect(
+          (await surface.aiConversations()).single.messages.last.content, raw);
+      expect(tester.takeException(), isNull);
+    });
+  }
   testWidgets(
       'Settings account follows active authentication without a session snapshot',
       (tester) async {

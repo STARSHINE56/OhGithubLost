@@ -157,7 +157,7 @@
   "themeHint": "浅色、深色、跟随系统使用应用统一主题设置",
   "streaming": "流式输出（接口支持时）",
   "tools": "允许工具调用",
-  "structured": "JSON 结构化输出（需接口支持）",
+  "structured": "允许 JSON 格式回复（仅在明确要求时启用）",
   "outputParameter": "输出预算参数（接口不兼容时调整）",
   "outputParameter_auto": "自动选择协议参数",
   "outputParameter_max_tokens": "max_tokens",
