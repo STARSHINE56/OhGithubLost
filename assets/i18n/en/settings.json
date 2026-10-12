@@ -157,5 +157,9 @@
   "accelScopeActionArtifact": "Action artifacts",
   "accelScopeRepoFile": "Repository files (download & preview)",
   "accelScopeReadmeImage": "Images inside README",
-  "storageAllFilesGranted": "All-files access granted"
+  "storageAllFilesGranted": "All-files access granted",
+  "appearanceGroup": "Appearance",
+  "networkStorageGroup": "Network & Storage",
+  "accountGroup": "Account",
+  "aboutGroup": "About"
 }
