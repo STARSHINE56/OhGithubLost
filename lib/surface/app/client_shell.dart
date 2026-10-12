@@ -177,15 +177,62 @@ class _OgLClientShellState extends State<OgLClientShell>
           child: SafeArea(
             child: Column(
               children: [
-                ListTile(
-                  title: Text(
-                    'OGL',
-                    style: Theme.of(context).textTheme.headlineSmall,
+                // 用户信息头部
+                Container(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 24,
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        child: const Icon(Icons.person, size: 28),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'OGL',
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'GitHub 客户端',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Expanded(
                   child: ListView(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
                     children: [
+                      // 主导航分组
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                        child: Text(
+                          '主导航',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ),
                       for (final tab in OgLShellTab.values)
                         ListTile(
                           selected: tab == _tab,
@@ -196,15 +243,35 @@ class _OgLClientShellState extends State<OgLClientShell>
                             OgLShellTab.settings => Icons.settings_outlined,
                           }),
                           title: Text(OgLI18n.instance.t('shell', tab.name)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           onTap: () {
                             _scaffoldKey.currentState?.closeDrawer();
                             _select(tab);
                           },
                         ),
-                      const Divider(),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: Divider(),
+                      ),
+                      // 工具分组
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                        child: Text(
+                          '工具',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ),
                       ListTile(
                         leading: const Icon(Icons.notifications_outlined),
                         title: Text(aiText('notifications')),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         onTap: () {
                           _scaffoldKey.currentState?.closeDrawer();
                           _openFeature(
@@ -215,6 +282,9 @@ class _OgLClientShellState extends State<OgLClientShell>
                       ListTile(
                         leading: const Icon(Icons.label_outline),
                         title: Text(aiText('stars')),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         onTap: () {
                           _scaffoldKey.currentState?.closeDrawer();
                           _openFeature(
@@ -225,6 +295,9 @@ class _OgLClientShellState extends State<OgLClientShell>
                       ListTile(
                         leading: const Icon(Icons.bar_chart),
                         title: Text(aiText('contributions')),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         onTap: () {
                           _scaffoldKey.currentState?.closeDrawer();
                           _openFeature(
@@ -235,14 +308,20 @@ class _OgLClientShellState extends State<OgLClientShell>
                     ],
                   ),
                 ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.auto_awesome_outlined),
-                  title: Text(aiText('title')),
-                  onTap: () {
-                    _scaffoldKey.currentState?.closeDrawer();
-                    _openFeature(AiChatPage(surface: widget.surface));
-                  },
+                // 底部 AI 按钮
+                Container(
+                  margin: const EdgeInsets.all(16),
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      _scaffoldKey.currentState?.closeDrawer();
+                      _openFeature(AiChatPage(surface: widget.surface));
+                    },
+                    icon: const Icon(Icons.auto_awesome),
+                    label: Text(aiText('title')),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(double.infinity, 48),
+                    ),
+                  ),
                 ),
               ],
             ),
