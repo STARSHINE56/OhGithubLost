@@ -19,6 +19,7 @@ import 'package:flutter/services.dart';
 import '../../kernel/kernel.dart';
 import '../i18n/og_l_i18n.dart';
 import '../pages/ai_chat_page.dart';
+import '../pages/ai_settings_page.dart';
 import '../pages/contributions_page.dart';
 import '../pages/dashboard_page.dart';
 import '../pages/github_notifications_page.dart';
