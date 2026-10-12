@@ -1,0 +1,239 @@
+# ============================================================================
+# OGL · fork 正式发布工作流（Android）
+#
+# 与上游 build.yml 的关系：本工作流面向本 fork（STARSHINE56）的 Android 正式
+# 发布，只构建 APK / AAB，复用仓库既有工具（boot_manifest.py / android_signing.py
+# / inject_platform_spec.py）。上游 build.yml 的全平台发布仍可继续使用。
+#
+# 引导清单（Boot Manifest）由 fork 自有密钥 OGL_BOOT_KEY 签名（v3 信任根，
+# 见 lib/kernel/boot/release_trust_root.dart），不再依赖上游私钥。
+# Android 正式包用固定 Release 签名（OGL_ANDROID_* Secrets）。
+# ============================================================================
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: '发布通道（stable=正式版；beta/alpha=预发布）'
+        required: true
+        default: 'stable'
+        type: choice
+        options:
+          - stable
+          - beta
+          - alpha
+      version_name:
+        description: '版本名 versionName（必填·如 7.6.0；写入所有产物与 tag）'
+        required: true
+        type: string
+      version_number:
+        description: '版本号（必填·正整数；Android versionCode 下限）'
+        required: true
+        type: string
+      release_notes:
+        description: 'Release 说明（可留空，留空用自动模板）'
+        required: false
+        default: ''
+        type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.47.5'
+
+jobs:
+  manifest:
+    name: 生成引导清单（Ed25519 签名 · fork 自有密钥）
+    runs-on: ubuntu-latest
+    outputs:
+      android_version_code: ${{ steps.android_version.outputs.version_code }}
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 校验发布参数（手动触发必填）
+        env:
+          VN: ${{ inputs.version_name }}
+          VNUM: ${{ inputs.version_number }}
+        run: |
+          set -euo pipefail
+          [ -n "$VN" ] || { echo '::error::version_name 必填'; exit 1; }
+          echo "$VN" | grep -Eq '^[0-9]+\.[0-9]+(\.[0-9]+)?$' || { echo "::error::version_name 需形如 2.0 或 2.0.0，当前：$VN"; exit 1; }
+          echo "$VNUM" | grep -Eq '^[1-9][0-9]*$' || { echo '::error::version_number 需为正整数'; exit 1; }
+          echo "发布参数校验通过：version_name=$VN version_number=$VNUM"
+
+      - name: 生成 Android 递增版本号
+        id: android_version
+        env:
+          OGL_REQUESTED_VERSION_CODE: ${{ inputs.version_number }}
+        run: python3 tool/android_signing.py version
+
+      - name: 安装签名依赖
+        run: python3 -m pip install --quiet --disable-pip-version-check cryptography
+
+      - name: 还原引导私钥（Actions Secret OGL_BOOT_KEY）
+        env:
+          OGL_BOOT_KEY: ${{ secrets.OGL_BOOT_KEY }}
+        run: |
+          [ -n "$OGL_BOOT_KEY" ] || { echo '::error::缺少 OGL_BOOT_KEY Secret（fork 引导私钥）'; exit 1; }
+          printf '%s' "$OGL_BOOT_KEY" > "$RUNNER_TEMP/ogl-boot-ed25519.key"
+
+      - name: 生成并注入 .dart_define.json
+        env:
+          VERSION_INPUT: ${{ inputs.version_name }}
+        run: |
+          python3 tool/boot_manifest.py \
+            --version "$VERSION_INPUT" \
+            --build-id "$GITHUB_SHA" \
+            --key "$RUNNER_TEMP/ogl-boot-ed25519.key" \
+            --out dart_define.json
+
+      - name: 上传注入件
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-manifest
+          path: |
+            dart_define.json
+            boot_manifest.json
+          retention-days: 7
+
+  build:
+    name: Android 正式 Release · ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    needs: [manifest]
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: universal-APK
+            build: apk
+            args: '--release'
+            artifact: build/app/outputs/flutter-apk/app-release.apk
+          - label: AAB
+            build: appbundle
+            args: '--release'
+            artifact: build/app/outputs/bundle/release/app-release.aab
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 下载引导清单注入件
+        uses: actions/download-artifact@v4
+        with:
+          name: boot-manifest
+
+      - name: 安装 Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: 生成平台工程脚手架并注入规格
+        run: |
+          flutter create --platforms=android --org com.yingo --project-name ohgithublost .
+          rm -f test/widget_test.dart
+          python3 tool/inject_platform_spec.py --target android || exit 1
+          flutter pub get
+
+      - name: 还原固定 Android Release 签名（缺配置即失败）
+        env:
+          OGL_ANDROID_KEYSTORE: ${{ secrets.OGL_ANDROID_KEYSTORE }}
+          OGL_ANDROID_STORE_PASSWORD: ${{ secrets.OGL_ANDROID_STORE_PASSWORD }}
+          OGL_ANDROID_KEY_PASSWORD: ${{ secrets.OGL_ANDROID_KEY_PASSWORD }}
+          OGL_ANDROID_KEY_ALIAS: ${{ secrets.OGL_ANDROID_KEY_ALIAS }}
+          OGL_ANDROID_CERT_SHA256: ${{ secrets.OGL_ANDROID_CERT_SHA256 }}
+        run: python3 tool/android_signing.py prepare
+
+      - name: 构建 ${{ matrix.label }}
+        run: >-
+          flutter build ${{ matrix.build }} ${{ matrix.args }}
+          --build-name=${{ inputs.version_name }}
+          --build-number=${{ needs.manifest.outputs.android_version_code }}
+          --dart-define-from-file=dart_define.json
+
+      - name: apksigner 核验固定签名、包名及版本号
+        if: matrix.build == 'apk'
+        env:
+          OGL_ANDROID_CERT_SHA256: ${{ secrets.OGL_ANDROID_CERT_SHA256 }}
+        run: python3 tool/android_signing.py verify --version-code "${{ needs.manifest.outputs.android_version_code }}"
+
+      - name: 清理 Android 签名私密文件
+        if: always()
+        run: python3 tool/android_signing.py cleanup
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.label }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: 创建 GitHub Release
+    needs: [build, manifest]
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VN: ${{ inputs.version_name }}
+      CH: ${{ inputs.channel }}
+      VNUM: ${{ needs.manifest.outputs.android_version_code }}
+      NOTES: ${{ inputs.release_notes }}
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 下载全部产物
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: 计算标签
+        id: tag
+        run: |
+          set -u
+          V=${VN#v}
+          if [ "$CH" = "stable" ]; then
+            T="v$V"
+          elif echo "$V" | grep -qi "$CH"; then
+            T="v$V"
+          else
+            T="v$V-$CH"
+          fi
+          echo "tag=$T" >> "$GITHUB_OUTPUT"
+          echo "→ 标签: $T"
+
+      - name: 生成发布说明
+        run: |
+          set -u
+          if [ -n "$NOTES" ]; then
+            printf '%s\n' "$NOTES" > notes.md
+            echo "→ 正文来源：workflow 输入"
+          else
+            {
+              echo "OGL（OhGithubLost）正式发布（fork 自有引导签名 v3）。"
+              echo ""
+              echo "- 通道：$CH"
+              echo "- 版本：$VN（Android build $VNUM）"
+              echo "- 产物：universal APK 与 AAB（固定 Release 签名）"
+            } > notes.md
+            echo "→ 正文来源：自动模板"
+          fi
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
+          body_path: notes.md
+          prerelease: ${{ inputs.channel != 'stable' }}
+          draft: false
+          files: dist/*/*
+          fail_on_unmatched_files: false
