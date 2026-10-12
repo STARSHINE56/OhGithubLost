@@ -102,14 +102,17 @@ def verify(pattern, expected_code=None):
     reports = []
     for apk in apks:
         proc = subprocess.run([sdk_tool('apksigner'), 'verify', '--verbose',
-                               '--print-certs', str(apk)], capture_output=True, text=True)
+                               '--print-certs', '--print-certs-pem', str(apk)],
+                              capture_output=True, text=True)
         if proc.returncode:
             raise ValueError('apksigner verification failed: ' + apk.name)
-        # With --verbose, current apksigner prints v3/v3.1 signers by SDK range
-        # instead of "Signer #1". Check every range, including rotation entries.
-        found = re.findall(
-            r'^Signer (?:#\d+|\(minSdkVersion=.*\)) certificate SHA-256 digest:\s*(\S+)',
-            proc.stdout, re.M)
+        # Hash the actual verified certificates. Signer labels differ between
+        # SDK releases and signature schemes; PEM is independent of those labels.
+        certificates = re.findall(
+            r'-----BEGIN CERTIFICATE-----\s*(.*?)\s*-----END CERTIFICATE-----',
+            proc.stdout, re.S)
+        found = [hashlib.sha256(base64.b64decode(''.join(body.split()), validate=True)).hexdigest()
+                 for body in certificates]
         signer_count = re.search(r'^Number of signers:\s*(\d+)\s*$', proc.stdout, re.M)
         numbered_signers = set(re.findall(r'^Signer #(\d+) certificate SHA-256 digest:', proc.stdout, re.M))
         if (not found or any(fingerprint(value) != expected for value in found)
