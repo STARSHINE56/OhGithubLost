@@ -236,25 +236,76 @@ class _DashboardPageState extends State<DashboardPage> {
                       final GhRepo repo = p.items[index];
                       return OgLReveal(
                         delay: OgLAnim.staggerOf(context, index),
-                        child: ListTile(
-                          leading: Icon(
-                            repo.isPrivate ? Icons.lock_outline : Icons.folder_outlined,
-                          ),
-                          title: OgLSharedTitle(
-                            tag: 'ogl-repo:${repo.fullName}',
-                            child: Text(
-                              repo.fullName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                        child: Card(
+                          elevation: 1,
+                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                          child: InkWell(
+                            onTap: () => _openRepo(repo),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        repo.isPrivate ? Icons.lock_outline : Icons.folder_outlined,
+                                        size: 20,
+                                        color: Theme.of(context).colorScheme.primary,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: OgLSharedTitle(
+                                          tag: 'ogl-repo:${repo.fullName}',
+                                          child: Text(
+                                            repo.fullName,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(fontWeight: FontWeight.w600),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (repo.description != null && repo.description!.isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      repo.description!,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      Icon(Icons.star_border, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        '${repo.stars}',
+                                        style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      if (repo.language != null && repo.language!.isNotEmpty) ...[
+                                        Icon(Icons.code, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          repo.language!,
+                                          style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                        ),
+                                      ],
+                                      const Spacer(),
+                                      Icon(Icons.chevron_right, size: 18, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                                    ],
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                          subtitle: Text(
-                            _repoSubtitle(repo),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => _openRepo(repo),
                         ),
                       );
                     },
