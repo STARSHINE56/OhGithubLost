@@ -265,8 +265,7 @@ class _ProfilePageState extends State<ProfilePage> {
               margin: const EdgeInsets.symmetric(horizontal: 16),
               child: ListTile(
                 leading: const Icon(Icons.settings_outlined),
-                title: const Text('设置'),
-                subtitle: const Text('外观、网络、账户、关于'),
+                title: Text(OgLI18n.instance.t('shell', 'settings')),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.push(
                   context,
