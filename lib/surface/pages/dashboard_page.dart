@@ -43,6 +43,9 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   int _segment = 0;
+  final ScrollController _scrollController = ScrollController();
+  bool _showFab = true;
+  double _lastScroll = 0;
   late final _RepoPaged _mine = _RepoPaged(
     loader: (int page) => widget.surface.domain.api
         .myRepos(perPage: _kPageSize, page: page, sort: 'updated'),
@@ -57,11 +60,26 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(_mine.refresh()));
+  }
+
+  void _onScroll() {
+    final double currentScroll = _scrollController.position.pixels;
+    if (currentScroll > _lastScroll && currentScroll > 100) {
+      // 下滑，隐藏 FAB
+      if (_showFab) setState(() => _showFab = false);
+    } else {
+      // 上滑，显示 FAB
+      if (!_showFab) setState(() => _showFab = true);
+    }
+    _lastScroll = currentScroll;
   }
 
   @override
   void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     _mine.dispose();
     _starred.dispose();
     super.dispose();
@@ -163,10 +181,14 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _createRepo,
-        icon: const Icon(Icons.add),
-        label:  Text(_t('newRepo')),
+      floatingActionButton: AnimatedSlide(
+        offset: _showFab ? Offset.zero : const Offset(0, 2),
+        duration: const Duration(milliseconds: 200),
+        child: FloatingActionButton.extended(
+          onPressed: _createRepo,
+          icon: const Icon(Icons.add),
+          label:  Text(_t('newRepo')),
+        ),
       ),
       body: Column(
         children: <Widget>[
@@ -215,6 +237,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 return RefreshIndicator(
                   onRefresh: p.refresh,
                   child: ListView.separated(
+                    controller: _scrollController,
                     padding: const EdgeInsets.only(bottom: 80), // 底部留白，不让 FAB 挡住
                     physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: p.items.length + (p.done ? 0 : 1),
