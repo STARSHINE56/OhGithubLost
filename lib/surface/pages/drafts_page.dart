@@ -225,19 +225,6 @@ class _DraftsPageState extends State<DraftsPage> {
                     ),
                   ),
                 ),
-                  subtitle: Text(
-                    '${draft.repo}${draft.branch.isEmpty ? '' : '@${draft.branch}'} · '
-                    'rev ${draft.revision} · ${_fmt(draft.updatedAt)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  trailing: IconButton(
-                    tooltip: _t('delete'),
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () => unawaited(_confirmDelete(draft)),
-                  ),
-                  onTap: () => _view(draft),
-                ),
               );
             },
           ),
