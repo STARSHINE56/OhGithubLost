@@ -73,7 +73,9 @@ class _OgLKeyboardGuardState extends State<OgLKeyboardGuard>
       return false;
     }
     final BuildContext? context = focus.context;
-    if (context?.widget is EditableText) {
+    if (context?.widget is EditableText ||
+        context?.findAncestorWidgetOfExactType<EditableText>() != null ||
+        context?.findAncestorWidgetOfExactType<TextField>() != null) {
       return true;
     }
     final String? label = focus.debugLabel;
@@ -133,7 +135,8 @@ class _OgLKeyboardGuardState extends State<OgLKeyboardGuard>
       );
     }
     if (!ignore && _ignoring) {
-      OgLLogFile.line('窗口', '键盘 inset 恢复生效（bottom=${bottom.toStringAsFixed(0)}）');
+      OgLLogFile.line(
+          '窗口', '键盘 inset 恢复生效（bottom=${bottom.toStringAsFixed(0)}）');
     }
     _ignoring = ignore;
 

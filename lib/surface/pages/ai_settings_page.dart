@@ -1,18 +1,33 @@
-/// AI 设置：协议与服务地址独立配置，只显示密钥是否已保存。
+/// AI 服务、GitHub 集成、Token 优化和聊天体验；密钥只进入保险库。
 library;
 
+import 'dart:async';
 import 'package:flutter/material.dart';
-
 import '../i18n/og_l_i18n.dart';
 import '../surface_bridge.dart';
 import '../types.dart';
 
 String aiText(String key, [Map<String, String>? args]) =>
     OgLI18n.instance.t('ai', key, args: args);
-
-/// 公共错误入口只显示业务键或通用错误，不输出密钥/响应原文。
-String aiError(Object error) =>
-    aiText(error is AiException ? error.code : 'requestFailed');
+String aiError(Object error) {
+  if (error is AiException) {
+    return aiText(error.code);
+  }
+  final text = '$error';
+  if (text.contains('401')) {
+    return aiText('unauthorized');
+  }
+  if (text.contains('403')) {
+    return aiText('forbidden');
+  }
+  if (text.contains('404')) {
+    return aiText('notFound');
+  }
+  if (text.contains('RateLimit') || text.contains('429')) {
+    return aiText('rateLimit');
+  }
+  return aiText('requestFailed');
+}
 
 class AiSettingsPage extends StatefulWidget {
   const AiSettingsPage({required this.surface, super.key});
@@ -21,63 +36,91 @@ class AiSettingsPage extends StatefulWidget {
   State<AiSettingsPage> createState() => _AiSettingsPageState();
 }
 
-class _AiSettingsPageState extends State<AiSettingsPage> {
-  final _url = TextEditingController();
-  final _key = TextEditingController();
-  String _kind = 'openai', _model = '', _preset = 'deepseek';
-  bool _enabled = false, _busy = true, _savedKey = false;
+class _AiSettingsPageState extends State<AiSettingsPage>
+    with WidgetsBindingObserver {
+  final _url = TextEditingController(),
+      _key = TextEditingController(),
+      _model = TextEditingController();
+  Map<String, Object?> _draft = const AiSettings().toJson();
+  bool _loading = true, _busy = false, _savedKey = false;
   String? _error;
   List<String> _models = [];
+  Map<String, dynamic> _caps = {};
+  Timer? _saveTimer;
+  Future<void> _saveQueue = Future<void>.value();
+  bool _keyDirty = false;
+  String? _keyScope;
+  String? _githubLogin;
+  int _loginEpoch = 0;
+  String? _shownKeyId, _shownCapabilityId;
   static const _presets = {
     'deepseek': ('openai', 'https://api.deepseek.com'),
     'openai': ('openai', 'https://api.openai.com/v1'),
     'anthropic': ('anthropic', 'https://api.anthropic.com/v1'),
-    'gemini': ('gemini', 'https://generativelanguage.googleapis.com/v1beta'),
-    'custom': ('openai', ''),
+    'gemini': ('gemini', 'https://generativelanguage.googleapis.com/v1beta')
   };
-
-  AiSettings get _config => AiSettings(
-    enabled: _enabled,
-    model: _model,
-    kind: _kind,
-    baseUrl: _url.text.trim().replaceAll(RegExp(r'/+$'), ''),
-  );
-
+  AiSettings get _config => AiSettings.fromJson({
+        ..._draft,
+        'baseUrl': _url.text.trim().replaceAll(RegExp(r'/+$'), ''),
+        'model': _model.text.trim()
+      });
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    widget.surface.aiAccountChanges.addListener(_accountChanged);
+    unawaited(_refreshLogin());
     _load();
+  }
+
+  void _accountChanged() => unawaited(_refreshLogin());
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed &&
+        !_loading &&
+        (_saveTimer?.isActive == true || _keyDirty)) {
+      unawaited(_save(silent: true));
+    }
+  }
+
+  Future<void> _refreshLogin() async {
+    final epoch = ++_loginEpoch;
+    try {
+      final login = await widget.surface.aiAccountLogin();
+      if (mounted && epoch == _loginEpoch) {
+        setState(() => _githubLogin = login);
+      }
+    } catch (e) {
+      if (mounted && epoch == _loginEpoch) {
+        setState(() => _error = aiError(e));
+      }
+    }
   }
 
   Future<void> _load() async {
     try {
       final value = await widget.surface.aiSettings();
-      final hasKey = await widget.surface.aiHasKey(config: value);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _enabled = value.enabled;
-        _kind = value.kind;
-        _model = value.model;
-        _url.text = value.baseUrl;
-        _savedKey = hasKey;
-        _preset =
-            _presets.entries
-                .where((e) => e.value.$2 == value.baseUrl)
-                .map((e) => e.key)
-                .firstOrNull ??
-            'custom';
-        _busy = false;
-      });
-      if (hasKey) {
-        await _detect();
+      final saved = await widget.surface.aiHasKey(config: value);
+      final caps = await widget.surface.aiCapabilities(value);
+      final models = await widget.surface.aiCachedModels(value);
+      if (mounted) {
+        setState(() {
+          _draft = value.toJson();
+          _url.text = value.baseUrl;
+          _model.text = value.model;
+          _savedKey = saved;
+          _caps = caps;
+          _models = models;
+          _shownKeyId = value.keyId;
+          _shownCapabilityId = value.capabilityId;
+          _loading = false;
+        });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
+          _loading = false;
           _error = aiError(e);
-          _busy = false;
         });
       }
     }
@@ -85,64 +128,125 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.surface.aiAccountChanges.removeListener(_accountChanged);
+    if (!_loading && (_saveTimer?.isActive == true || _keyDirty)) {
+      unawaited(_save(silent: true));
+    }
+    _saveTimer?.cancel();
     _url.dispose();
     _key.dispose();
+    _model.dispose();
     super.dispose();
   }
 
-  Future<void> _detect() async {
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      final config = _config;
-      final models = await widget.surface.aiDetectModels(
-        key: _key.text,
-        config: config,
-      );
-      final saved = await widget.surface.aiHasKey(config: config);
-      if (!mounted) {
-        return;
-      }
+  void _change(String key, Object? value) {
+    setState(() => _draft[key] = value);
+    _schedule();
+  }
+
+  void _schedule() {
+    final config = _config;
+    if (_shownCapabilityId != config.capabilityId) {
       setState(() {
-        _models = models;
-        _savedKey = saved;
-        if (!_models.contains(_model)) {
-          _model = _models.first;
+        if (_shownKeyId != config.keyId) {
+          _models = [];
+          _savedKey = false;
+          // 不把另一服务的输入密钥带到新的端点。
+          _key.clear();
+          _keyDirty = false;
+          _keyScope = null;
         }
+        _caps = {};
+        _shownKeyId = config.keyId;
+        _shownCapabilityId = config.capabilityId;
       });
+    }
+    _saveTimer?.cancel();
+    _saveTimer =
+        Timer(const Duration(milliseconds: 700), () => _save(silent: true));
+  }
+
+  Future<void> _save({bool clear = false, bool silent = false}) {
+    if (_loading) {
+      return Future<void>.value();
+    }
+    _saveTimer?.cancel();
+    final config = _config;
+    final enteredKey = _key.text;
+    final key =
+        !clear && _keyDirty && _keyScope == config.keyId ? enteredKey : null;
+    // 在 await 或页面销毁之前取快照；串行写入避免较旧的输入覆盖新值。
+    _saveQueue = _saveQueue.then(
+        (_) => _persist(config, enteredKey, key, clear: clear, silent: silent));
+    return _saveQueue;
+  }
+
+  Future<void> _persist(AiSettings config, String enteredKey, String? key,
+      {required bool clear, required bool silent}) async {
+    try {
+      await widget.surface.aiSaveSettings(config, key: key, clearKey: clear);
+      final saved = await widget.surface.aiHasKey(config: config);
+      final models = await widget.surface.aiCachedModels(config);
+      final caps = await widget.surface.aiCapabilities(config);
+      if (mounted && config.capabilityId == _config.capabilityId) {
+        setState(() {
+          if (_key.text == enteredKey) {
+            _keyDirty = false;
+            // 自动保存不清空正在编辑的内容，以免继续输入只保存后半段。
+            if (!silent || clear) {
+              _key.clear();
+            }
+          }
+          _savedKey = saved;
+          _models = models;
+          _caps = caps;
+          _shownKeyId = config.keyId;
+          _shownCapabilityId = config.capabilityId;
+          _error = null;
+        });
+        if (!silent) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(aiText('saved'))));
+        }
+      }
     } catch (e) {
       if (mounted) {
         setState(() => _error = aiError(e));
       }
-    } finally {
-      if (mounted) {
-        setState(() => _busy = false);
-      }
     }
   }
 
-  Future<void> _save({bool clear = false}) async {
+  Future<void> _detect({bool capabilities = false}) async {
+    _saveTimer?.cancel();
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      if (_enabled && !clear && _models.isEmpty) {
-        throw const AiException('detectFirst');
-      }
-      await widget.surface.aiSaveSettings(
-        _config,
-        key: clear ? null : _key.text,
-        clearKey: clear,
-      );
-      _key.clear();
-      final saved = await widget.surface.aiHasKey(config: _config);
-      if (mounted) {
-        setState(() => _savedKey = saved);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(aiText('saved'))));
+      if (capabilities) {
+        final caps =
+            await widget.surface.aiDetectCapabilities(_config, key: _key.text);
+        if (mounted) {
+          setState(() {
+            _caps = caps;
+            if (caps['text'] == true) {
+              _draft['tools'] = caps['tools'] == true;
+              _draft['streaming'] = caps['streaming'] == true;
+            }
+          });
+        }
+      } else {
+        final models = await widget.surface
+            .aiDetectModels(key: _key.text, config: _config);
+        if (mounted) {
+          setState(() {
+            _models = models;
+            if (_model.text.isEmpty) {
+              _model.text = models.first;
+            }
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -151,155 +255,224 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
     } finally {
       if (mounted) {
         setState(() => _busy = false);
+        await _save(silent: true);
       }
     }
   }
 
+  Widget _section(String key, List<Widget> children) => Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: Padding(
+          padding: const EdgeInsets.all(16),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text(aiText(key), style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 12),
+            ...children
+          ])));
+  Widget _switch(String key, {String? label}) => SwitchListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(aiText(label ?? key)),
+      value: _draft[key] == true,
+      onChanged: _busy ? null : (v) => _change(key, v));
+  Widget _select(String key, List<String> values, {String? label}) =>
+      DropdownButtonFormField<String>(
+          key: ValueKey('$key:${_draft[key]}'),
+          initialValue: '${_draft[key]}',
+          isExpanded: true,
+          decoration: InputDecoration(labelText: aiText(label ?? key)),
+          items: values
+              .map((e) =>
+                  DropdownMenuItem(value: e, child: Text(aiText('${key}_$e'))))
+              .toList(),
+          onChanged: _busy ? null : (v) => _change(key, v));
+  Widget _number(String key, {bool decimal = false}) => Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: TextFormField(
+          initialValue: '${_draft[key]}',
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(labelText: aiText(key)),
+          onChanged: (v) {
+            final number = decimal ? double.tryParse(v) : int.tryParse(v);
+            if (number != null && number >= 0) {
+              _draft[key] = number;
+              _schedule();
+            }
+          }));
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(aiText('settings'))),
-    body: Align(
-      alignment: Alignment.topCenter,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 720),
-        child: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            SwitchListTile(
-              title: Text(aiText('enabled')),
-              value: _enabled,
-              onChanged: _busy ? null : (v) => setState(() => _enabled = v),
-            ),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(aiText('privacy')),
-              ),
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: _preset,
-              decoration: InputDecoration(labelText: aiText('provider')),
-              items: _presets.keys
-                  .map(
-                    (e) => DropdownMenuItem(value: e, child: Text(aiText(e))),
-                  )
-                  .toList(),
-              onChanged: _busy
-                  ? null
-                  : (v) => setState(() {
-                      _preset = v!;
-                      _kind = _presets[v]!.$1;
-                      _url.text = _presets[v]!.$2;
-                      _key.clear();
-                      _models = [];
-                      _model = '';
-                      _savedKey = false;
-                    }),
-            ),
-            const SizedBox(height: 16),
-            if (_preset == 'custom') ...[
-              DropdownButtonFormField<String>(
-                initialValue: _kind,
-                decoration: InputDecoration(labelText: aiText('protocol')),
-                items: ['openai', 'anthropic', 'gemini']
-                    .map(
-                      (e) => DropdownMenuItem(value: e, child: Text(aiText(e))),
-                    )
-                    .toList(),
-                onChanged: _busy
-                    ? null
-                    : (v) => setState(() {
-                        _kind = v!;
-                        _models = [];
-                        _model = '';
-                        _savedKey = false;
-                      }),
-              ),
-              const SizedBox(height: 16),
-            ],
-            TextField(
-              controller: _url,
-              enabled: !_busy,
-              decoration: InputDecoration(
-                labelText: aiText('baseUrl'),
-                helperText: aiText('urlHint'),
-              ),
-              onChanged: (_) => setState(() {
-                _models = [];
-                _model = '';
-                _savedKey = false;
-              }),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _key,
-              enabled: !_busy,
-              obscureText: true,
-              enableSuggestions: false,
-              autocorrect: false,
-              decoration: InputDecoration(
-                labelText: aiText('apiKey'),
-                helperText: aiText(_savedKey ? 'keySaved' : 'keyHint'),
-              ),
-              onChanged: (_) => setState(() {
-                _models = [];
-                _model = '';
-              }),
-            ),
-            const SizedBox(height: 16),
-            OutlinedButton.icon(
-              onPressed: _busy ? null : _detect,
-              icon: const Icon(Icons.manage_search),
-              label: Text(aiText('detectModels')),
-            ),
-            if (_models.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                key: ValueKey('$_kind:$_model'),
-                initialValue: _model,
-                isExpanded: true,
-                decoration: InputDecoration(labelText: aiText('model')),
-                items: _models
-                    .map(
-                      (e) => DropdownMenuItem(
-                        value: e,
-                        child: Text(e, overflow: TextOverflow.ellipsis),
-                      ),
-                    )
-                    .toList(),
-                onChanged: _busy ? null : (v) => setState(() => _model = v!),
-              ),
-              const SizedBox(height: 8),
-              Text(aiText('modelHint')),
-            ],
-            if (_busy)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: LinearProgressIndicator(),
-              ),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: _busy ? null : () => _save(),
-              icon: const Icon(Icons.save_outlined),
-              label: Text(aiText('save')),
-            ),
-            if (_savedKey)
-              TextButton(
-                onPressed: _busy ? null : () => _save(clear: true),
-                child: Text(aiText('removeKey')),
-              ),
-          ],
-        ),
-      ),
-    ),
-  );
+  Widget build(BuildContext context) => PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop && _saveTimer?.isActive == true) {
+          _saveTimer?.cancel();
+          unawaited(_save(silent: true));
+        }
+      },
+      child: Scaffold(
+          resizeToAvoidBottomInset: true,
+          appBar: AppBar(title: Text(aiText('settings'))),
+          body: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 720),
+                      child: ListView(
+                          padding: const EdgeInsets.all(16),
+                          children: [
+                            _switch('enabled'),
+                            Text(aiText('privacy')),
+                            const SizedBox(height: 16),
+                            _section('provider', [
+                              Wrap(spacing: 8, children: [
+                                for (final preset in _presets.entries)
+                                  ActionChip(
+                                      label: Text(aiText(preset.key)),
+                                      onPressed: _busy
+                                          ? null
+                                          : () {
+                                              setState(() {
+                                                _draft['kind'] =
+                                                    preset.value.$1;
+                                                _url.text = preset.value.$2;
+                                                _model.clear();
+                                                _models = [];
+                                                _caps = {};
+                                                _key.clear();
+                                                _savedKey = false;
+                                              });
+                                              _schedule();
+                                            })
+                              ]),
+                              const SizedBox(height: 12),
+                              DropdownButtonFormField<String>(
+                                  key: ValueKey(_draft['kind']),
+                                  initialValue: '${_draft['kind']}',
+                                  isExpanded: true,
+                                  decoration: InputDecoration(
+                                      labelText: aiText('protocol')),
+                                  items: ['openai', 'anthropic', 'gemini']
+                                      .map((e) => DropdownMenuItem(
+                                          value: e, child: Text(aiText(e))))
+                                      .toList(),
+                                  onChanged:
+                                      _busy ? null : (v) => _change('kind', v)),
+                              TextField(
+                                  controller: _url,
+                                  enabled: !_busy,
+                                  decoration: InputDecoration(
+                                      labelText: aiText('baseUrl'),
+                                      helperText: aiText('urlHint'),
+                                      helperMaxLines: 3),
+                                  onChanged: (_) => _schedule()),
+                              TextField(
+                                  controller: _key,
+                                  enabled: !_busy,
+                                  obscureText: true,
+                                  enableSuggestions: false,
+                                  autocorrect: false,
+                                  onChanged: (_) {
+                                    _keyDirty = true;
+                                    _keyScope = _config.keyId;
+                                    _schedule();
+                                  },
+                                  decoration: InputDecoration(
+                                      labelText: aiText('apiKey'),
+                                      helperMaxLines: 3,
+                                      helperText: aiText(
+                                          _savedKey ? 'keySaved' : 'keyHint'))),
+                              TextField(
+                                  controller: _model,
+                                  enabled: !_busy,
+                                  decoration: InputDecoration(
+                                      labelText: aiText('model'),
+                                      helperText: aiText('manualModel')),
+                                  onChanged: (_) => _schedule()),
+                              if (_models.isNotEmpty)
+                                DropdownButtonFormField<String>(
+                                    isExpanded: true,
+                                    decoration: InputDecoration(
+                                        labelText: aiText('detectModels')),
+                                    items: _models
+                                        .map((e) => DropdownMenuItem(
+                                            value: e,
+                                            child: Text(e,
+                                                overflow:
+                                                    TextOverflow.ellipsis)))
+                                        .toList(),
+                                    onChanged: (v) {
+                                      _model.text = v!;
+                                      _schedule();
+                                    }),
+                              const SizedBox(height: 12),
+                              Wrap(spacing: 8, runSpacing: 8, children: [
+                                OutlinedButton.icon(
+                                    onPressed: _busy ? null : () => _detect(),
+                                    icon: const Icon(Icons.manage_search),
+                                    label: Text(aiText('detectModels'))),
+                                OutlinedButton.icon(
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _detect(capabilities: true),
+                                    icon: const Icon(Icons.science_outlined),
+                                    label: Text(aiText('detectCapabilities')))
+                              ]),
+                              Text(aiText('probeHint')),
+                              if (_caps.isNotEmpty)
+                                Text(
+                                    '${aiText('capabilities')}: ${_caps.entries.map((e) => '${e.key}: ${e.value is bool ? (e.value == true ? aiText('supported') : aiText('unsupported')) : e.key.endsWith('Error') ? aiText('${e.value}') : e.value}').join(' · ')}'),
+                              _switch('tools'),
+                              _switch('streaming'),
+                              _switch('structured'),
+                              _select('outputParameter', [
+                                'auto',
+                                'max_tokens',
+                                'max_completion_tokens',
+                                'none'
+                              ]),
+                              _select('reasoningEffort',
+                                  ['', 'low', 'medium', 'high']),
+                            ]),
+                            _section('githubIntegration', [
+                              ListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  leading: const Icon(Icons.person_outline),
+                                  title: Text(
+                                      _githubLogin ?? aiText('loginRequired')),
+                                  subtitle: Text(aiText('accountContext'))),
+                              TextFormField(
+                                  initialValue: '${_draft['defaultRepo']}',
+                                  decoration: InputDecoration(
+                                      labelText: aiText('defaultRepo')),
+                                  onChanged: (v) {
+                                    _draft['defaultRepo'] = v.trim();
+                                    _schedule();
+                                  }),
+                              _switch('autoRepository'),
+                              _select('toolMode', ['all', 'read', 'chat']),
+                              Text(aiText('writeConfirmation')),
+                            ]),
+                            _section('chatExperience', [
+                              _switch('autoScroll'),
+                              _number('fontSize', decimal: true),
+                              Text(aiText('themeHint'))
+                            ]),
+                            if (_busy) const LinearProgressIndicator(),
+                            if (_error != null)
+                              Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Text(_error!,
+                                      style: TextStyle(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .error))),
+                            FilledButton.icon(
+                                onPressed: _busy ? null : () => _save(),
+                                icon: const Icon(Icons.save_outlined),
+                                label: Text(aiText('save'))),
+                            if (_savedKey)
+                              TextButton(
+                                  onPressed:
+                                      _busy ? null : () => _save(clear: true),
+                                  child: Text(aiText('removeKey'))),
+                          ])))));
 }

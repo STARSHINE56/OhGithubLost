@@ -11,10 +11,14 @@ class ProductivityService {
     required this.github,
     required this.account,
     required DiskKv store,
+    this.notificationAccess,
+    this.scopedGithub,
   }) : _store = store;
   final AiGithubRequest github;
   final Future<String?> Function() account;
   final DiskKv _store;
+  final Future<void> Function(String accountId)? notificationAccess;
+  final AiGithubScopedRequest? scopedGithub;
 
   Future<String> _id() async {
     final id = await account();
@@ -27,17 +31,42 @@ class ProductivityService {
   Future<List<Map<String, dynamic>>> notifications({
     int page = 1,
     bool all = false,
-  }) async => (await github('GET', '/notifications', null, {
-    'all': '$all',
-    'per_page': '50',
-    'page': '$page',
-  }) as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }) async =>
+      (await _notificationRequest('GET', '/notifications', null, {
+        'all': '$all',
+        'per_page': '50',
+        'page': '$page',
+      }) as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+  Future<Object?> _notificationRequest(String method, String path,
+      Map<String, Object?>? body, Map<String, String> query) async {
+    final id = await _id();
+    await notificationAccess?.call(id);
+    return _requestBound(id, method, path, body, query);
+  }
+
+  Future<Object?> _requestBound(String id, String method, String path,
+      Map<String, Object?>? body, Map<String, String> query) async {
+    if (await _id() != id) {
+      throw const AiException('accountChanged');
+    }
+    final result = scopedGithub == null
+        ? await github(method, path, body, query)
+        : await scopedGithub!(id, method, path, body, query);
+    if (await _id() != id) {
+      throw const AiException('accountChanged');
+    }
+    return result;
+  }
 
   Future<void> markRead(String threadId) async {
     if (!RegExp(r'^\d+$').hasMatch(threadId)) {
       throw const AiException('invalidResponse');
     }
-    await github('PATCH', '/notifications/threads/$threadId', {}, {});
+    await _notificationRequest(
+        'PATCH', '/notifications/threads/$threadId', {}, {});
   }
 
   /// 通知只允许读取其仓库内的 Issue/PR，不能跟随任意外部 subject URL。
@@ -59,7 +88,7 @@ class ProductivityService {
     }
     final user = await _id();
     final item = Map<String, dynamic>.from(
-      await github('GET', uri.path, null, {}) as Map,
+      await _requestBound(user, 'GET', uri.path, null, {}) as Map,
     );
     if (await _id() != user) {
       throw const AiException('accountChanged');
@@ -82,11 +111,8 @@ class ProductivityService {
     final meta = await starMetadata();
     meta[repo] = {
       'category': category.trim(),
-      'tags': tags
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .toList(),
+      'tags':
+          tags.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList(),
     };
     if (await _id() != id) {
       throw const AiException('accountChanged');

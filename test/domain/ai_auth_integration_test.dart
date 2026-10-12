@@ -15,6 +15,15 @@ import 'package:ohgithublost/kernel/contract/disk_store.dart';
 
 void main() {
   test(
+      'Notification capability exposes no credential and recognizes unsupported token types',
+      () {
+    for (final prefix in ['github_pat_', 'ghu_', 'ghs_']) {
+      expect(GhToken('${prefix}fake').notificationsUnsupported, true);
+    }
+    expect(const GhToken('ghp_fake').notificationsUnsupported, false);
+    expect(const GhToken('gho_fake').notificationsUnsupported, false);
+  });
+  test(
     'AI reads use the currently signed-in GitHub token; AI keys stay separate',
     () async {
       final vault = InMemoryVault(), store = InMemoryKv();

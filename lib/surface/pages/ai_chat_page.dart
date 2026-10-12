@@ -9,7 +9,9 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../surface_bridge.dart';
 import '../types.dart';
+import '../util/ai_reply_text.dart';
 import '../util/link_opener.dart';
+import '../widgets/code_editor_field.dart';
 import 'ai_confirmation.dart';
 import 'ai_settings_page.dart';
 
@@ -30,9 +32,19 @@ class AiChatPage extends StatefulWidget {
 class _AiChatPageState extends State<AiChatPage> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
+  final _focus = FocusNode();
+  final _stream = ValueNotifier<String>('');
+  final _scaffold = GlobalKey<ScaffoldState>();
+  AiSettings _settings = const AiSettings();
+  AiCancellation? _cancel;
+  Timer? _streamTimer;
+  String _pending = '', _search = '';
+  bool _userShown = false, _followOutput = true;
+
   AiConversation? _chat;
   List<AiConversation> _history = [];
   bool _loading = true, _sending = false;
+  int _loadEpoch = 0;
   String? _error;
 
   @override
@@ -45,7 +57,14 @@ class _AiChatPageState extends State<AiChatPage> {
 
   void _accountChanged() {
     if (mounted) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      _cancel?.cancel();
+      _input.clear();
+      setState(() {
+        _chat = null;
+        _history = [];
+        _loading = true;
+      });
+      unawaited(_load(fresh: true));
     }
   }
 
@@ -53,6 +72,10 @@ class _AiChatPageState extends State<AiChatPage> {
   void dispose() {
     widget.surface.aiBuildChanges.removeListener(_reload);
     widget.surface.domain.auth.removeListener(_accountChanged);
+    _cancel?.cancel();
+    _streamTimer?.cancel();
+    _stream.dispose();
+    _focus.dispose();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
@@ -65,7 +88,9 @@ class _AiChatPageState extends State<AiChatPage> {
   }
 
   Future<void> _load({bool keep = false, bool fresh = false}) async {
+    final epoch = ++_loadEpoch;
     try {
+      final settings = await widget.surface.aiSettings();
       final list = await widget.surface.aiConversations();
       AiConversation? chat;
       if (keep) {
@@ -85,8 +110,9 @@ class _AiChatPageState extends State<AiChatPage> {
         repo: widget.repo,
         branch: widget.branch,
       );
-      if (mounted) {
+      if (mounted && epoch == _loadEpoch) {
         setState(() {
+          _settings = settings;
           _history = list;
           _chat = chat;
           _loading = false;
@@ -94,7 +120,7 @@ class _AiChatPageState extends State<AiChatPage> {
       }
       _bottom();
     } catch (e) {
-      if (mounted) {
+      if (mounted && epoch == _loadEpoch) {
         setState(() {
           _error = aiError(e);
           _loading = false;
@@ -103,18 +129,28 @@ class _AiChatPageState extends State<AiChatPage> {
     }
   }
 
-  void _bottom() => WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (_scroll.hasClients) {
-      _scroll.jumpTo(_scroll.position.maxScrollExtent);
-    }
-  });
+  void _bottom({bool force = true}) =>
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scroll.hasClients &&
+            (force || (_settings.autoScroll && _followOutput))) {
+          _scroll.jumpTo(_scroll.position.maxScrollExtent);
+        }
+      });
 
-  Future<void> _send() async {
-    final text = _input.text.trim();
+  Future<void> _send([String? preset]) async {
+    final text = preset ?? _input.text.trim();
     if (_sending || _chat == null || text.isEmpty) {
       return;
     }
-    _input.clear();
+    if (preset == null) {
+      _input.clear();
+    }
+    _focus.requestFocus();
+    _cancel = AiCancellation();
+    final epoch = _loadEpoch;
+    _stream.value = '';
+    _userShown = false;
+    _followOutput = true;
     setState(() {
       _sending = true;
       _error = null;
@@ -123,23 +159,53 @@ class _AiChatPageState extends State<AiChatPage> {
       final request = widget.surface.aiSend(
         _chat!,
         text,
-        (proposal) => confirmAiProposal(context, proposal),
+        (proposal) => mounted
+            ? confirmAiProposal(context, proposal)
+            : Future.value(false),
+        cancellation: _cancel,
+        onText: (value) {
+          if (!mounted || epoch != _loadEpoch) {
+            return;
+          }
+          if (!_userShown) {
+            _userShown = true;
+            setState(() {});
+            _bottom();
+          }
+          _pending = value;
+          _streamTimer ??= Timer(const Duration(milliseconds: 70), () {
+            _streamTimer = null;
+            if (mounted) {
+              _stream.value = _pending;
+              _bottom(force: false);
+            }
+          });
+        },
       );
       setState(() {});
       _bottom();
       await request;
-      _history = await widget.surface.aiConversations();
+      final history = await widget.surface.aiConversations();
+      if (epoch == _loadEpoch) {
+        _history = history;
+      }
     } catch (e) {
-      if (mounted) {
+      if (mounted && epoch == _loadEpoch) {
         setState(() {
           _error = aiError(e);
-          _input.text = text;
+          if (_input.text.isEmpty &&
+              _chat?.messages.lastOrNull?.role != 'user') {
+            _input.text = text;
+          }
         });
       }
     } finally {
       if (mounted) {
+        _streamTimer?.cancel();
+        _streamTimer = null;
+        _stream.value = '';
         setState(() => _sending = false);
-        _bottom();
+        _bottom(force: false);
       }
     }
   }
@@ -204,12 +270,12 @@ class _AiChatPageState extends State<AiChatPage> {
                                     if (mounted) {
                                       ScaffoldMessenger.of(context)
                                           .showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                aiText('operationFinished'),
-                                              ),
-                                            ),
-                                          );
+                                        SnackBar(
+                                          content: Text(
+                                            aiText('operationFinished'),
+                                          ),
+                                        ),
+                                      );
                                     }
                                   } catch (error) {
                                     if (mounted) {
@@ -235,55 +301,283 @@ class _AiChatPageState extends State<AiChatPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: Text(aiText('title')),
-      actions: [
-        IconButton(
-          tooltip: aiText('newChat'),
-          icon: const Icon(Icons.add_comment_outlined),
-          onPressed: _sending ? null : () => _load(fresh: true),
-        ),
-        IconButton(
-          tooltip: aiText('audit'),
-          icon: const Icon(Icons.history),
-          onPressed: _sending ? null : _logs,
-        ),
-        IconButton(
-          tooltip: aiText('settings'),
-          icon: const Icon(Icons.tune),
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute<void>(
-              builder: (_) => AiSettingsPage(surface: widget.surface),
-            ),
-          ),
-        ),
-      ],
-    ),
-    drawer: Drawer(
-      child: SafeArea(
-        child: Column(
-          children: [
-            ListTile(title: Text(aiText('history'))),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _history.length,
-                itemBuilder: (_, index) {
-                  final chat = _history[index];
-                  return ListTile(
+  Future<String?> _textDialog(String title, String initial) async {
+    final controller = TextEditingController(text: initial);
+    final result = await showDialog<String>(
+        context: context,
+        builder: (dialog) => AlertDialog(
+                title: Text(title),
+                content: TextField(
+                    controller: controller,
+                    autofocus: true,
+                    minLines: 1,
+                    maxLines: 5),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(dialog),
+                      child: Text(aiText('cancel'))),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(dialog, controller.text),
+                      child: Text(aiText('save')))
+                ]));
+    // 弹窗退出动画结束之后，输入控件才会解绑 controller。
+    const debounceDispose = Duration(milliseconds: 250);
+    await Future<void>.delayed(debounceDispose);
+    controller.dispose();
+    return result;
+  }
+
+  Future<bool> _confirm(String title) async =>
+      await showDialog<bool>(
+          context: context,
+          builder: (dialog) => AlertDialog(title: Text(title), actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(dialog, false),
+                    child: Text(aiText('cancel'))),
+                FilledButton(
+                    onPressed: () => Navigator.pop(dialog, true),
+                    child: Text(aiText('confirm')))
+              ])) ??
+      false;
+
+  Future<void> _historyAction(AiConversation chat, String action) async {
+    try {
+      if (action == 'rename') {
+        final title = await _textDialog(aiText('rename'), chat.displayTitle);
+        if (title != null) {
+          await widget.surface.aiRenameChat(chat, title);
+        }
+      }
+      if (action == 'delete' && await _confirm(aiText('deleteChat'))) {
+        await widget.surface.aiDeleteChat(chat.id);
+      }
+      await _load(
+          keep: true, fresh: action == 'delete' && chat.id == _chat?.id);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = aiError(e));
+      }
+    }
+  }
+
+  Future<void> _edit(int index, {bool regenerate = false}) async {
+    if (_sending || _chat == null) {
+      return;
+    }
+    final chat = _chat!;
+    var user = index;
+    while (user >= 0 && chat.messages[user].role != 'user') {
+      user--;
+    }
+    if (user < 0) {
+      return;
+    }
+    final text = regenerate
+        ? chat.messages[user].content
+        : await _textDialog(aiText('editMessage'), chat.messages[user].content);
+    if (text == null || text.trim().isEmpty) {
+      return;
+    }
+    chat.messages.removeRange(user, chat.messages.length);
+    await widget.surface.aiSaveChat(chat);
+    if (mounted) {
+      await _send(text);
+    }
+  }
+
+  Future<void> _configure() async {
+    await Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+            builder: (_) => AiSettingsPage(surface: widget.surface)));
+    if (mounted) {
+      final value = await widget.surface.aiSettings();
+      if (mounted) {
+        setState(() => _settings = value);
+      }
+    }
+  }
+
+  Future<void> _models() async {
+    final models = await widget.surface.aiCachedModels(_settings);
+    if (!mounted) {
+      return;
+    }
+    if (models.isNotEmpty) {
+      final selected = await showDialog<String>(
+          context: context,
+          builder: (context) =>
+              SimpleDialog(title: Text(aiText('model')), children: [
+                for (final id
+                    in {...models, _settings.model}.where((e) => e.isNotEmpty))
+                  SimpleDialogOption(
+                      onPressed: () => Navigator.pop(context, id),
+                      child: Text(id)),
+                SimpleDialogOption(
+                    onPressed: () => Navigator.pop(context, ''),
+                    child: Text(aiText('manualModel'))),
+              ]));
+      if (selected == null || !mounted) {
+        return;
+      }
+      if (selected.isNotEmpty) {
+        final value =
+            AiSettings.fromJson({..._settings.toJson(), 'model': selected});
+        await widget.surface.aiSaveSettings(value);
+        if (mounted) {
+          setState(() => _settings = value);
+        }
+        return;
+      }
+    }
+    final input = await _textDialog(aiText('model'), _settings.model);
+    if (input == null || input.trim().isEmpty) {
+      return;
+    }
+    final value =
+        AiSettings.fromJson({..._settings.toJson(), 'model': input.trim()});
+    try {
+      await widget.surface.aiSaveSettings(value);
+      if (mounted) {
+        setState(() => _settings = value);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = aiError(e));
+      }
+    }
+  }
+
+  Future<void> _repository() async {
+    if (_chat == null) {
+      return;
+    }
+    try {
+      final data = await widget.surface
+          .aiReadTool(_chat!, 'list_my_repositories', {}) as Map;
+      if (!mounted) {
+        return;
+      }
+      final selected = await showModalBottomSheet<String>(
+          context: context,
+          isScrollControlled: true,
+          builder: (sheet) => SafeArea(
+              child: SizedBox(
+                  height: MediaQuery.sizeOf(sheet).height * .7,
+                  child: Column(children: [
+                    ListTile(
+                        title: Text(aiText('repository')),
+                        trailing: TextButton(
+                            onPressed: () => Navigator.pop(sheet, ''),
+                            child: Text(aiText('manualRepo')))),
+                    Expanded(
+                        child: ListView(children: [
+                      for (final item in data['items'] as List)
+                        ListTile(
+                            title: Text('${(item as Map)['full_name']}'),
+                            leading: Icon(item['private'] == true
+                                ? Icons.lock_outline
+                                : Icons.folder_outlined),
+                            onTap: () => Navigator.pop(
+                                sheet, item['full_name'] as String))
+                    ]))
+                  ]))));
+      if (selected == null) {
+        return;
+      }
+      final target = selected.isEmpty
+          ? await _textDialog(aiText('manualRepo'), _chat!.repo)
+          : selected;
+      if (target != null && target.isNotEmpty) {
+        await widget.surface.aiSwitchRepo(_chat!, target);
+        if (mounted) {
+          setState(() {});
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _error = aiError(e));
+      }
+    }
+  }
+
+  Future<void> _addContext() async {
+    if (_chat?.repo.isEmpty ?? true) {
+      await _repository();
+    }
+    if (!mounted || (_chat?.repo.isEmpty ?? true)) {
+      return;
+    }
+    final path = await _textDialog(aiText('context'), '');
+    if (path != null && path.trim().isNotEmpty && mounted) {
+      _input.text =
+          '${aiText('contextFilesTask')} ${path.trim()}\n${_input.text}';
+      _input.selection = TextSelection.collapsed(offset: _input.text.length);
+      _focus.requestFocus();
+    }
+  }
+
+  Future<void> _toolMode() async {
+    final mode = await showModalBottomSheet<String>(
+        context: context,
+        builder: (sheet) => SafeArea(
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+              for (final mode in ['all', 'read', 'chat'])
+                ListTile(
+                    title: Text(aiText('mode_$mode')),
+                    selected: _settings.toolMode == mode,
+                    onTap: () => Navigator.pop(sheet, mode))
+            ])));
+    if (mode != null) {
+      final value =
+          AiSettings.fromJson({..._settings.toJson(), 'toolMode': mode});
+      await widget.surface.aiSaveSettings(value);
+      if (mounted) {
+        setState(() => _settings = value);
+      }
+    }
+  }
+
+  Widget _sidebar(bool desktop) {
+    final history = _history
+        .where((e) => '${e.displayTitle} ${e.repo}'
+            .toLowerCase()
+            .contains(_search.toLowerCase()))
+        .toList();
+    return SafeArea(
+        child: Column(children: [
+      ListTile(
+          title: Text(aiText('history')),
+          trailing: IconButton(
+              tooltip: aiText('newChat'),
+              icon: const Icon(Icons.edit_square),
+              onPressed: _sending ? null : () => _load(fresh: true))),
+      Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: TextField(
+              decoration: InputDecoration(
+                  hintText: aiText('searchHistory'),
+                  prefixIcon: const Icon(Icons.search)),
+              onChanged: (v) => setState(() => _search = v))),
+      Expanded(
+          child: ListView.builder(
+              itemCount: history.length,
+              itemBuilder: (context, index) {
+                final chat = history[index];
+                return ListTile(
                     selected: chat.id == _chat?.id,
                     title: Text(
-                      chat.messages.isEmpty
-                          ? aiText('newChat')
-                          : chat.messages.first.content,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                        chat.displayTitle.isEmpty
+                            ? aiText('newChat')
+                            : chat.displayTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
                     subtitle: Text(
-                      chat.repo.isEmpty ? aiText('noRepo') : chat.repo,
-                    ),
+                        chat.repo.isEmpty
+                            ? aiText('accountContext')
+                            : chat.repo,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis),
                     onTap: _sending
                         ? null
                         : () {
@@ -291,194 +585,445 @@ class _AiChatPageState extends State<AiChatPage> {
                               _chat = chat;
                               _error = null;
                             });
-                            Navigator.pop(context);
+                            if (!desktop) {
+                              Navigator.pop(context);
+                            }
                             _bottom();
                           },
-                    trailing: IconButton(
-                      tooltip: aiText('deleteChat'),
-                      icon: const Icon(Icons.delete_outline),
+                    trailing: PopupMenuButton<String>(
+                        enabled: !_sending,
+                        onSelected: (v) => _historyAction(chat, v),
+                        itemBuilder: (_) => [
+                              PopupMenuItem(
+                                  value: 'rename',
+                                  child: Text(aiText('rename'))),
+                              PopupMenuItem(
+                                  value: 'delete',
+                                  child: Text(aiText('deleteChat')))
+                            ]));
+              })),
+      ListTile(
+          leading: const Icon(Icons.tune),
+          title: Text(aiText('settings')),
+          onTap: _configure),
+      ListTile(
+          leading: const Icon(Icons.history),
+          title: Text(aiText('audit')),
+          onTap: _sending ? null : _logs),
+      ListTile(
+          leading: const Icon(Icons.delete_sweep_outlined),
+          title: Text(aiText('clearHistory')),
+          onTap: _sending
+              ? null
+              : () async {
+                  if (await _confirm(aiText('clearHistory'))) {
+                    await widget.surface.aiClearChats();
+                    await _load(fresh: true);
+                  }
+                }),
+    ]));
+  }
+
+  Widget _welcome() => Center(
+      child: SingleChildScrollView(
+          child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Icon(Icons.auto_awesome_outlined,
+                    size: 40, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(height: 20),
+                Text(aiText('welcome'),
+                    style: Theme.of(context).textTheme.headlineSmall,
+                    textAlign: TextAlign.center),
+                const SizedBox(height: 24),
+                Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    alignment: WrapAlignment.center,
+                    children: [
+                      for (final key in [
+                        'quickRepos',
+                        'quickAnalyze',
+                        'quickCode',
+                        'quickFix',
+                        'quickActions',
+                        'quickIssues'
+                      ])
+                        ActionChip(
+                            label: Text(aiText(key)),
+                            onPressed: () => _send(aiText('${key}Task')))
+                    ]),
+              ]))));
+
+  Widget _message(AiMessage message, int index) {
+    final user = message.role == 'user', scheme = Theme.of(context).colorScheme;
+    final rawJson = _requestsJson(index);
+    final text = message.notice
+        ? aiText(message.content)
+        : user
+            ? message.content
+            : formatAiReply(message.content, preserveJson: rawJson);
+    return Align(
+        key: ValueKey('${message.at.microsecondsSinceEpoch}:$index'),
+        alignment: user ? Alignment.centerRight : Alignment.centerLeft,
+        child: Container(
+            constraints: BoxConstraints(maxWidth: user ? 640 : 840),
+            margin: const EdgeInsets.only(bottom: 20),
+            padding: const EdgeInsets.all(14),
+            decoration: user
+                ? BoxDecoration(
+                    color: scheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(22))
+                : null,
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              user
+                  ? SelectableText(text,
+                      style:
+                          TextStyle(fontSize: _settings.fontSize, height: 1.5))
+                  : AiMarkdown(text: text, fontSize: _settings.fontSize),
+              for (final artifact in message.artifacts)
+                OutlinedButton.icon(
+                    icon: const Icon(Icons.download),
+                    onPressed: () => _download(artifact),
+                    label: Text(
+                        '${aiText('downloadArtifact')}: ${artifact['name']}.zip')),
+              Row(mainAxisSize: MainAxisSize.min, children: [
+                IconButton(
+                    visualDensity: VisualDensity.compact,
+                    tooltip: aiText('copy'),
+                    icon: const Icon(Icons.copy_outlined, size: 18),
+                    onPressed: () => Clipboard.setData(
+                        ClipboardData(text: rawJson ? message.content : text))),
+                if (!message.notice)
+                  IconButton(
+                      visualDensity: VisualDensity.compact,
+                      tooltip: aiText(user ? 'editMessage' : 'regenerate'),
+                      icon: Icon(user ? Icons.edit_outlined : Icons.refresh,
+                          size: 18),
                       onPressed: _sending
                           ? null
-                          : () async {
-                              await widget.surface.aiDeleteChat(chat.id);
-                              if (context.mounted) {
-                                Navigator.pop(context);
-                                await _load(fresh: chat.id == _chat?.id);
-                              }
-                            },
-                    ),
-                  );
-                },
-              ),
-            ),
+                          : () => _edit(index, regenerate: !user)),
+              ]),
+            ])));
+  }
+
+  bool _requestsJson(int index) {
+    for (var i = index - 1; i >= 0; i--) {
+      if (_chat!.messages[i].role == 'user') {
+        return widget.surface.aiRequestsJson(_chat!.messages[i].content);
+      }
+    }
+    return false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final desktop = MediaQuery.sizeOf(context).width >= 1000;
+    return Scaffold(
+        key: _scaffold,
+        resizeToAvoidBottomInset: true,
+        appBar: AppBar(
+            centerTitle: true,
+            leading: IconButton(
+                tooltip: aiText('menu'),
+                icon: const Icon(Icons.menu),
+                onPressed: () => _scaffold.currentState?.openDrawer()),
+            title: TextButton(
+                onPressed: _sending ? null : _models,
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Flexible(
+                      child: Text(
+                          _settings.model.isEmpty
+                              ? aiText('title')
+                              : _settings.model,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis)),
+                  const Icon(Icons.expand_more, size: 18)
+                ])),
+            actions: [
+              IconButton(
+                  tooltip: aiText('newChat'),
+                  icon: const Icon(Icons.edit_square),
+                  onPressed: _sending ? null : () => _load(fresh: true))
+            ]),
+        drawer: Drawer(child: _sidebar(false)),
+        body: Row(
+          children: [
+            if (desktop) SizedBox(width: 280, child: _sidebar(true)),
+            Expanded(
+                child: SafeArea(
+                    top: false,
+                    child: Align(
+                        alignment: Alignment.topCenter,
+                        child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 900),
+                            child:
+                                LayoutBuilder(builder: (context, constraints) {
+                              final compact = constraints.maxHeight < 260;
+                              final tiny = constraints.maxHeight < 160;
+                              final inputLines = (constraints.maxHeight *
+                                      .4 /
+                                      (MediaQuery.textScalerOf(context)
+                                              .scale(_settings.fontSize) *
+                                          1.5))
+                                  .floor()
+                                  .clamp(1, 6);
+                              return Column(children: [
+                                if (!compact && _chat?.repo.isNotEmpty == true)
+                                  ListTile(
+                                      dense: true,
+                                      leading: const Icon(Icons.folder_outlined,
+                                          size: 18),
+                                      title: Text(
+                                          '${_chat!.repo} · ${_chat!.branch}',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis),
+                                      onTap: _sending ? null : _repository),
+                                Expanded(
+                                    child: _loading
+                                        ? const Center(
+                                            child: CircularProgressIndicator())
+                                        : _chat?.messages.isEmpty != false
+                                            ? _welcome()
+                                            : NotificationListener<
+                                                    UserScrollNotification>(
+                                                onNotification: (notification) {
+                                                  if (notification.depth == 0) {
+                                                    _followOutput = notification
+                                                            .metrics
+                                                            .extentAfter <
+                                                        160;
+                                                  }
+                                                  return false;
+                                                },
+                                                child: ListView.builder(
+                                                    key: const ValueKey(
+                                                        'ai-message-list'),
+                                                    controller: _scroll,
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 16,
+                                                        vertical: 12),
+                                                    keyboardDismissBehavior:
+                                                        ScrollViewKeyboardDismissBehavior
+                                                            .onDrag,
+                                                    itemCount:
+                                                        _chat!.messages.length +
+                                                            (_sending ? 1 : 0),
+                                                    itemBuilder:
+                                                        (context, index) {
+                                                      if (index ==
+                                                          _chat!.messages
+                                                              .length) {
+                                                        return ValueListenableBuilder<
+                                                                String>(
+                                                            valueListenable:
+                                                                _stream,
+                                                            builder: (context, text, child) => Padding(
+                                                                padding:
+                                                                    const EdgeInsets
+                                                                        .all(
+                                                                        14),
+                                                                child: text.isEmpty
+                                                                    ? Text(aiText(
+                                                                        'working'))
+                                                                    : AiMarkdown(
+                                                                        text: formatAiReply(
+                                                                            text,
+                                                                            preserveJson: _requestsJson(_chat!.messages.length)),
+                                                                        fontSize: _settings.fontSize)));
+                                                      }
+                                                      return _message(
+                                                          _chat!
+                                                              .messages[index],
+                                                          index);
+                                                    }))),
+                                if (_error != null)
+                                  Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16),
+                                      child: Row(children: [
+                                        Expanded(
+                                            child: Text(_error!,
+                                                maxLines: compact ? 1 : 3,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                    color: Theme.of(context)
+                                                        .colorScheme
+                                                        .error))),
+                                        TextButton(
+                                            onPressed: _configure,
+                                            child: Text(aiText('settings'))),
+                                        if (!_sending &&
+                                            _chat?.messages.isNotEmpty == true)
+                                          TextButton(
+                                              onPressed: () => _edit(
+                                                  _chat!.messages.length - 1,
+                                                  regenerate: true),
+                                              child: Text(aiText('retry'))),
+                                      ])),
+                                Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                        12, 8, 12, 10),
+                                    child: Container(
+                                        decoration: BoxDecoration(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .surfaceContainer,
+                                            borderRadius:
+                                                BorderRadius.circular(28)),
+                                        padding: const EdgeInsets.fromLTRB(
+                                            14, 8, 8, 8),
+                                        child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              CallbackShortcuts(
+                                                  bindings: {
+                                                    const SingleActivator(
+                                                            LogicalKeyboardKey
+                                                                .enter,
+                                                            control: true):
+                                                        () => unawaited(_send())
+                                                  },
+                                                  child: TextField(
+                                                      key: const ValueKey(
+                                                          'ai-input'),
+                                                      controller: _input,
+                                                      focusNode: _focus,
+                                                      minLines: 1,
+                                                      maxLines: inputLines,
+                                                      scrollPadding:
+                                                          const EdgeInsets.all(
+                                                              20),
+                                                      style: TextStyle(
+                                                          fontSize: _settings
+                                                              .fontSize,
+                                                          height: 1.5),
+                                                      decoration: InputDecoration(
+                                                          hintText: aiText('inputHint'),
+                                                          suffixIcon: tiny
+                                                              ? IconButton.filled(
+                                                                  tooltip: aiText(_sending ? 'stop' : 'send'),
+                                                                  onPressed: _loading
+                                                                      ? null
+                                                                      : _sending
+                                                                          ? () => _cancel?.cancel()
+                                                                          : _send,
+                                                                  icon: Icon(_sending ? Icons.stop : Icons.arrow_upward))
+                                                              : null,
+                                                          border: InputBorder.none),
+                                                      enabled: !_loading)),
+                                              if (!tiny)
+                                                Row(children: [
+                                                  IconButton(
+                                                      tooltip:
+                                                          aiText('context'),
+                                                      icon:
+                                                          const Icon(Icons.add),
+                                                      onPressed: _sending
+                                                          ? null
+                                                          : _addContext),
+                                                  IconButton(
+                                                      tooltip:
+                                                          aiText('repository'),
+                                                      icon: const Icon(Icons
+                                                          .folder_outlined),
+                                                      onPressed: _sending
+                                                          ? null
+                                                          : _repository),
+                                                  IconButton(
+                                                      tooltip:
+                                                          aiText('toolMode'),
+                                                      icon: const Icon(
+                                                          Icons.build_outlined),
+                                                      onPressed: _sending
+                                                          ? null
+                                                          : _toolMode),
+                                                  const Spacer(),
+                                                  IconButton.filled(
+                                                      tooltip: aiText(_sending
+                                                          ? 'stop'
+                                                          : 'send'),
+                                                      onPressed: _loading
+                                                          ? null
+                                                          : _sending
+                                                              ? () => _cancel
+                                                                  ?.cancel()
+                                                              : _send,
+                                                      icon: Icon(_sending
+                                                          ? Icons.stop
+                                                          : Icons.arrow_upward))
+                                                ]),
+                                            ]))),
+                              ]);
+                            })))))
           ],
-        ),
-      ),
-    ),
-    body: SafeArea(
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1000),
-          child: Column(
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                color: Theme.of(context).colorScheme.surfaceContainer,
-                child: Text(
-                  _chat?.repo.isNotEmpty == true
-                      ? '${_chat!.repo} · ${_chat!.branch}'
-                      : aiText('contextHint'),
-                ),
-              ),
+        ));
+  }
+}
+
+/// 复用项目代码查看器：高亮、复制和横向滚动；正文继承系统字体回退。
+class AiMarkdown extends StatelessWidget {
+  const AiMarkdown({required this.text, this.fontSize = 16, super.key});
+  final String text;
+  final double fontSize;
+  @override
+  Widget build(BuildContext context) {
+    final blocks = RegExp(r'^```([^\n]*)\n([\s\S]*?)^```\s*$', multiLine: true)
+        .allMatches(text);
+    final children = <Widget>[];
+    var offset = 0;
+    Widget prose(String data) => MarkdownBody(
+        data: data,
+        selectable: true,
+        styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+            p: TextStyle(fontSize: fontSize, height: 1.6),
+            listBullet: TextStyle(fontSize: fontSize, height: 1.6),
+            code: TextStyle(fontSize: fontSize * .85, height: 1.5)),
+        onTapLink: (label, href, title) {
+          if (href != null &&
+              ['http', 'https'].contains(Uri.tryParse(href)?.scheme)) {
+            unawaited(openLinkOrCopy(context, href));
+          }
+        });
+    for (final block in blocks) {
+      if (block.start > offset) {
+        children.add(prose(text.substring(offset, block.start)));
+      }
+      final code = block.group(2)!, language = block.group(1)!.trim();
+      children.add(Container(
+          margin: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainer,
+              borderRadius: BorderRadius.circular(12)),
+          child: Column(children: [
+            Row(children: [
+              const SizedBox(width: 12),
               Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _chat?.messages.isEmpty != false
-                    ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            aiText('welcome'),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      )
-                    : ListView.builder(
-                        controller: _scroll,
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _chat!.messages.length,
-                        itemBuilder: (context, index) {
-                          final message = _chat!.messages[index];
-                          final user = message.role == 'user';
-                          return Align(
-                            alignment: user
-                                ? Alignment.centerRight
-                                : Alignment.centerLeft,
-                            child: Card(
-                              color: user
-                                  ? Theme.of(context)
-                                        .colorScheme
-                                        .primaryContainer
-                                  : null,
-                              margin: const EdgeInsets.only(bottom: 16),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      aiText(user ? 'you' : 'title'),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelMedium,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    MarkdownBody(
-                                      data: message.notice
-                                          ? aiText(message.content)
-                                          : message.content,
-                                      selectable: true,
-                                      onTapLink: (text, href, title) {
-                                        if (href != null &&
-                                            ['https', 'http'].contains(
-                                              Uri.tryParse(href)?.scheme,
-                                            )) {
-                                          unawaited(
-                                            openLinkOrCopy(context, href),
-                                          );
-                                        }
-                                      },
-                                    ),
-                                    for (final artifact in message.artifacts)
-                                      OutlinedButton.icon(
-                                        icon: const Icon(Icons.download),
-                                        onPressed: () => _download(artifact),
-                                        label: Text(
-                                          '${aiText('downloadArtifact')}: ${artifact['name']}.zip',
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-              ),
-              if (_sending)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(aiText('working')),
-                    ],
-                  ),
-                ),
-              if (_error != null)
-                ListTile(
-                  leading: const Icon(Icons.error_outline),
-                  title: Text(_error!),
-                  trailing: IconButton(
-                    tooltip: aiText('settings'),
-                    icon: const Icon(Icons.tune),
-                    onPressed: () => Navigator.push(
-                      context,
-                      MaterialPageRoute<void>(
-                        builder: (_) => AiSettingsPage(surface: widget.surface),
-                      ),
-                    ),
-                  ),
-                ),
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded(
-                      child: CallbackShortcuts(
-                        bindings: {
-                          const SingleActivator(
-                            LogicalKeyboardKey.enter,
-                            control: true,
-                          ): () =>
-                              unawaited(_send()),
-                        },
-                        child: TextField(
-                          controller: _input,
-                          minLines: 1,
-                          maxLines: 6,
-                          decoration: InputDecoration(
-                            hintText: aiText('inputHint'),
-                            border: const OutlineInputBorder(),
-                          ),
-                          enabled: !_loading && !_sending,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filled(
-                      tooltip: aiText('send'),
-                      onPressed: _sending ? null : _send,
-                      icon: const Icon(Icons.arrow_upward),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    ),
-  );
+                  child: Text(language,
+                      maxLines: 1, overflow: TextOverflow.ellipsis)),
+              IconButton(
+                  tooltip: aiText('copy'),
+                  icon: const Icon(Icons.copy, size: 18),
+                  onPressed: () => Clipboard.setData(ClipboardData(text: code)))
+            ]),
+            SizedBox(
+                height: (code.split('\n').length * fontSize * 1.5 + 24)
+                    .clamp(70, 360)
+                    .toDouble(),
+                child: OgLCodeViewer(
+                    code: code,
+                    language: language,
+                    fontSize: fontSize * .85,
+                    showLineNumbers: false))
+          ])));
+      offset = block.end;
+    }
+    if (offset < text.length) {
+      children.add(prose(text.substring(offset)));
+    }
+    return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch, children: children);
+  }
 }

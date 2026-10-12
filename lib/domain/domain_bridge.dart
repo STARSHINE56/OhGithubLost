@@ -23,6 +23,7 @@ import '../kernel/contract/module.dart';
 import '../kernel/contract/net_types.dart';
 import '../kernel/contract/storage_export.dart';
 import '../kernel/environment.dart';
+import 'ai/ai_models.dart';
 import 'ai/ai_provider.dart';
 import 'ai/ai_service.dart';
 import 'gh/gh_api.dart';
@@ -59,7 +60,8 @@ class DomainBridge {
     this.ai,
     this.productivity,
   })  : downloads = downloads ?? IxDownloadManager(),
-        actionLogs = actionLogs ?? IxActionLogs(tokenProvider: () async => null),
+        actionLogs =
+            actionLogs ?? IxActionLogs(tokenProvider: () async => null),
         presign = presign ?? IxPresign(tokenProvider: () async => null),
         _repoFiles = repoFiles ?? RepoFileService(api: api);
 
@@ -122,10 +124,7 @@ class DomainBridge {
 /// 提供：`gh.auth` / `gh.client` / `gh.api`。
 class GhModule extends OgLModule {
   /// 创建模块。
-  GhModule({
-    this.maxConcurrent = 4,
-    this.baseUrl = 'https://api.github.com',
-  });
+  GhModule({this.maxConcurrent = 4, this.baseUrl = 'https://api.github.com'});
 
   /// 请求并发上限。
   final int maxConcurrent;
@@ -182,11 +181,13 @@ class GhModule extends OgLModule {
     // ★ R4：只读端点缓存（releases / branches / commits / issues / pulls /
     //   Actions / 仓库详情 …）。与底座一致性缓存互补：前者面向文件内容，
     //   这里面向"可容忍短暂陈旧的只读列表 / 详情"，账号维度隔离，切号即清。
-    client.attachReadCache(GhReadCache(
-      store: base.disk.kv,
-      accountId: () async => (await auth.activeAccountId()) ?? 'guest',
-      diagnostics: context.diagnostics,
-    ));
+    client.attachReadCache(
+      GhReadCache(
+        store: base.disk.kv,
+        accountId: () async => (await auth.activeAccountId()) ?? 'guest',
+        diagnostics: context.diagnostics,
+      ),
+    );
 
     // ★ 失败写入重放（D8）：把上次中断的写入在启动后补做。
     // 只依赖磁盘上的提交日志，失败不阻断启动（记录后照常进入界面）。
@@ -414,18 +415,81 @@ class DomainLayerModule extends OgLModule {
     // 两条通道分别注入：AI 密钥不经 GitHub 请求或镜像传输。
     final client = context.di.resolve<GhClient>();
     final base = BaseBridge.of(context.bridges);
-    Future<Object?> githubRequest(String method, String path, Map<String, Object?>? body, Map<String, String> query) async {
-      final response = await client.send(GhRequest(path: path,
-        method: NetMethod.values.firstWhere((e) => e.verb == method),
-        body: body, query: query, cacheBypass: true));
-      return response.body.trim().isEmpty ? <String, Object?>{} : jsonDecode(response.body);
+    Future<Object?> githubRequest(String method, String path,
+        Map<String, Object?>? body, Map<String, String> query,
+        {String? expectedAccountId}) async {
+      final response = await client.send(
+        GhRequest(
+          path: path,
+          method: NetMethod.values.firstWhere((e) => e.verb == method),
+          body: body,
+          query: query,
+          cacheBypass: true,
+          expectedAccountId: expectedAccountId,
+        ),
+      );
+      return response.body.trim().isEmpty
+          ? <String, Object?>{}
+          : jsonDecode(response.body);
     }
-    final provider = AiProvider(AiHttpTransport().send);
+
+    final aiTransport = AiHttpTransport();
+    final provider = AiProvider(aiTransport.send);
+
     final bridge = DomainBridge(
-      ai: AiService(store: base.disk.kv, vault: base.disk.vault,
-        github: githubRequest, provider: provider.request, account: ghAuth.activeAccountId),
-      productivity: ProductivityService(store: base.disk.kv,
-        github: githubRequest, account: ghAuth.activeAccountId),
+      ai: AiService(
+        store: base.disk.kv,
+        vault: base.disk.vault,
+        github: githubRequest,
+        scopedGithub: (id, method, path, body, query) =>
+            githubRequest(method, path, body, query, expectedAccountId: id),
+        provider: provider.request,
+        account: ghAuth.activeAccountId,
+        actionLogs: context.di.resolve<IxActionLogs>().fetch,
+        streamProvider: (config, key, body, onText, cancel) =>
+            provider.streaming(
+          config,
+          key,
+          body,
+          onText,
+          cancel,
+          (url, headers, payload) => aiTransport.send(
+            url,
+            headers,
+            payload,
+            onText: onText,
+            isCancelled: () => cancel.cancelled,
+            bindCancel: (abort) => cancel.onCancel = abort,
+          ),
+        ),
+      ),
+      productivity: ProductivityService(
+        store: base.disk.kv,
+        github: githubRequest,
+        account: ghAuth.activeAccountId,
+        notificationAccess: (id) async {
+          final token = await ghAuth.tokenFor(id);
+          if (token == null) {
+            throw const AiException('loginRequired');
+          }
+          if (token.notificationsUnsupported) {
+            throw const AiException('notificationsTokenUnsupported');
+          }
+        },
+        scopedGithub: (id, method, path, body, query) async {
+          try {
+            return await githubRequest(method, path, body, query,
+                expectedAccountId: id);
+          } on GhAuthException catch (error) {
+            if (error.statusCode == 403 &&
+                (path == '/notifications' ||
+                    path.startsWith('/notifications/'))) {
+              throw const AiException('notificationsPermission');
+            }
+            rethrow;
+          }
+        },
+      ),
       auth: ghAuth,
       api: context.di.resolve<GhApi>(),
       client: context.di.resolve<GhClient>(),
@@ -539,6 +603,7 @@ class _SysEnvProbe implements KernelEnvironmentProbe {
     );
   }
 }
+
 /// 装配根提供的**成品导出**实现（逻辑层只认契约，硬件层干活）。
 ///
 /// 存储②档（用户授权了 SAF 文件夹）时，把下载成品**粘贴**进该文件夹；

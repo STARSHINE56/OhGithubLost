@@ -77,10 +77,12 @@ class IxActionLogs {
       if (!file.isFile || !file.name.toLowerCase().endsWith('.txt')) {
         continue;
       }
-      out[_labelOf(file.name)] = utf8.decode(
+      final label = _labelOf(file.name);
+      final text = utf8.decode(
         file.content,
         allowMalformed: true,
       );
+      out[label] = '${out[label] ?? ''}\n--- ${file.name} ---\n$text';
     }
     return out;
   }
