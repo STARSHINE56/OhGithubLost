@@ -2136,34 +2136,63 @@ class _CodeTabState extends State<_CodeTab> {
                         itemBuilder: (BuildContext context, int index) =>
                               OgLReveal(
                                 delay: OgLAnim.staggerOf(context, index),
-                                child: ListTile(
-                                  leading: Icon(
-                                    ogLFileVisualFor(shown[index].path,
-                                            isDirectory: shown[index].isDirectory)
-                                        .icon,
-                                    color: ogLFileVisualFor(shown[index].path,
-                                            isDirectory: shown[index].isDirectory)
-                                        .color,
+                                child: Card(
+                                  elevation: 1,
+                                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                                  child: InkWell(
+                                    onTap: () {
+                                      if (shown[index].isDirectory) {
+                                        unawaited(_goTo(shown[index].path));
+                                      } else {
+                                        _openEntryDefault(shown[index]);
+                                      }
+                                    },
+                                    onLongPress: () => unawaited(_showEntryMenu(shown[index])),
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            ogLFileVisualFor(shown[index].path,
+                                                    isDirectory: shown[index].isDirectory)
+                                                .icon,
+                                            color: ogLFileVisualFor(shown[index].path,
+                                                    isDirectory: shown[index].isDirectory)
+                                                .color,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  ghPathName(shown[index].path),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                  style: const TextStyle(fontWeight: FontWeight.w500),
+                                                ),
+                                                if (!shown[index].isDirectory)
+                                                  Text(
+                                                    ghSizeText(shown[index].size),
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                                    ),
+                                                  ),
+                                              ],
+                                            ),
+                                          ),
+                                          Icon(
+                                            Icons.chevron_right,
+                                            size: 18,
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                  title: Text(
-                                    ghPathName(shown[index].path),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  subtitle: shown[index].isDirectory
-                                      ? null
-                                      : Text(ghSizeText(shown[index].size)),
-                                  trailing: shown[index].isDirectory
-                                      ? const Icon(Icons.chevron_right)
-                                      : null,
-                                  onTap: () {
-                                    if (shown[index].isDirectory) {
-                                      unawaited(_goTo(shown[index].path));
-                                    } else {
-                                      _openEntryDefault(shown[index]);
-                                    }
-                                  },
-                                  onLongPress: () => unawaited(_showEntryMenu(shown[index])),
                                 ),
                               ),
                       ),
