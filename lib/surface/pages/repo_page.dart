@@ -2361,26 +2361,61 @@ class _IssuesTabState extends State<_IssuesTab> {
                 _paged,
                 (BuildContext context, Map<String, dynamic> item, int index) {
                   final int number = ghInt(item, 'number');
-                  return ListTile(
-                    leading: const Icon(Icons.bug_report_outlined),
-                    title: Text(
-                      '#$number ${ghStr(item, 'title')}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                  return Card(
+                    elevation: 1,
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    child: InkWell(
+                      onTap: () => _openIssue(item),
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.bug_report_outlined,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '#$number ${ghStr(item, 'title')}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontWeight: FontWeight.w500),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    _t('issueMeta', <String, Object?>{'author': ghLogin(item), 'comments': ghInt(item, 'comments'), 'date': ghDate(item, 'created_at')}),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (ghStr(item, 'state') == 'open')
+                              IconButton(
+                                icon: const Icon(Icons.task_alt),
+                                tooltip: _t('close'),
+                                onPressed: () => _close(number),
+                              )
+                            else
+                              Icon(
+                                Icons.chevron_right,
+                                size: 18,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
-                    subtitle: Text(
-                      _t('issueMeta', <String, Object?>{'author': ghLogin(item), 'comments': ghInt(item, 'comments'), 'date': ghDate(item, 'created_at')}),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: ghStr(item, 'state') == 'open'
-                        ? IconButton(
-                            icon: const Icon(Icons.task_alt),
-                            tooltip: _t('close'),
-                            onPressed: () => _close(number),
-                          )
-                        : const Icon(Icons.chevron_right),
-                    onTap: () => _openIssue(item),
                   );
                 },
                 emptyIcon: Icons.task_alt,
