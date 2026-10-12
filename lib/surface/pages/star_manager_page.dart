@@ -232,23 +232,69 @@ class _StarManagerPageState extends State<StarManagerPage> {
                     itemBuilder: (context, index) {
                       final repo = filtered[index];
                       final data = _meta[repo.fullName] as Map? ?? {};
-                      return ListTile(
-                        leading: const Icon(Icons.star_outline),
-                        title: Text(repo.fullName),
-                        subtitle: Text(
-                          '${data['category'] ?? ''} ${(data['tags'] as List? ?? []).join(' · ')}\n${repo.description}',
-                        ),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute<void>(
-                            builder: (_) =>
-                                RepoPage(surface: widget.surface, repo: repo),
+                      return Card(
+                        elevation: 1,
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        child: InkWell(
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  RepoPage(surface: widget.surface, repo: repo),
+                            ),
                           ),
-                        ),
-                        trailing: IconButton(
-                          tooltip: aiText('organize'),
-                          icon: const Icon(Icons.label_outline),
-                          onPressed: () => _organize(repo),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.star_outline,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        repo.fullName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontWeight: FontWeight.w500),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '${data['category'] ?? ''} ${(data['tags'] as List? ?? []).join(' · ')}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                      if (repo.description != null)
+                                        Text(
+                                          repo.description!,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip: aiText('organize'),
+                                  icon: const Icon(Icons.label_outline),
+                                  onPressed: () => _organize(repo),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       );
                     },
