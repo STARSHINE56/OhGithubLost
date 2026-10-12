@@ -319,16 +319,6 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  String _repoSubtitle(GhRepo repo) {
-    final List<String> meta = <String>[
-      if (repo.language != null && repo.language!.isNotEmpty) repo.language!,
-      _t('starsCount', {'count': repo.stars}),
-      if (repo.isPrivate) _t('private'),
-    ];
-    final String? desc = repo.description;
-    if (desc == null || desc.isEmpty) {
-      return meta.join(' · ');
-    }
     return '${meta.join(' · ')} — $desc';
   }
 }
