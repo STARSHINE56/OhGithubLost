@@ -1,5 +1,5 @@
 # fork 开发包使用 debug 模式，不依赖原作者的发布私钥。
-# 不生成 Release，也不改变 release 启动签名校验。
+# Android 与正式包使用同一 Release 密钥，保持 debug 模式与既有启动校验。
 name: Preview builds
 on:
   push:
@@ -61,8 +61,39 @@ jobs:
           command -v python3 >/dev/null 2>&1 || OGL_PY=python
           "$OGL_PY" tool/inject_platform_spec.py --target ${{ matrix.platform }}
           flutter pub get
+      - name: 还原固定 Android Release 签名（缺配置即失败）
+        if: matrix.platform == 'android'
+        env:
+          OGL_ANDROID_KEYSTORE: ${{ secrets.OGL_ANDROID_KEYSTORE }}
+          OGL_ANDROID_STORE_PASSWORD: ${{ secrets.OGL_ANDROID_STORE_PASSWORD }}
+          OGL_ANDROID_KEY_PASSWORD: ${{ secrets.OGL_ANDROID_KEY_PASSWORD }}
+          OGL_ANDROID_KEY_ALIAS: ${{ secrets.OGL_ANDROID_KEY_ALIAS }}
+          OGL_ANDROID_CERT_SHA256: ${{ secrets.OGL_ANDROID_CERT_SHA256 }}
+        run: python3 tool/android_signing.py prepare
+      - name: 生成 Android 递增版本号
+        if: matrix.platform == 'android'
+        id: android_version
+        run: python3 tool/android_signing.py version
       - name: 编译开发包
-        run: flutter build ${{ matrix.target }} --debug
+        run: >-
+          flutter build ${{ matrix.target }} --debug
+          ${{ steps.android_version.outputs.version_code && format('--build-number={0}', steps.android_version.outputs.version_code) || '' }}
+      - name: apksigner 核验固定签名、包名及版本号
+        if: matrix.platform == 'android'
+        env:
+          OGL_ANDROID_CERT_SHA256: ${{ secrets.OGL_ANDROID_CERT_SHA256 }}
+        run: python3 tool/android_signing.py verify --version-code "${{ steps.android_version.outputs.version_code }}"
+      - name: 上传 Android 签名核验报告
+        if: matrix.platform == 'android'
+        uses: actions/upload-artifact@v4
+        with:
+          name: OGL-preview-android-signing
+          path: build/android-signing-report.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: 清理 Android 签名私密文件
+        if: always() && matrix.platform == 'android'
+        run: python3 tool/android_signing.py cleanup
       - uses: actions/upload-artifact@v4
         with:
           name: OGL-preview-${{ matrix.platform }}

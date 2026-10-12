@@ -320,6 +320,49 @@ def _is_kotlin_dsl(path: str) -> bool:
     return str(path).endswith('.kts')
 
 
+def patch_android_signing(root: str, step: dict) -> int:
+    """Sign debug/release/AAB once in Gradle; never use the runner debug key."""
+    path = step['file']
+    text = _read(path)
+    marker = 'OGL_PLATFORM_SPEC fixedSigning'
+    if marker in text:
+        return 0
+    if not _is_kotlin_dsl(path):
+        raise ValueError('Fixed signing requires the current Kotlin DSL template')
+    # Flutter templates have used both accessor forms. Reject template drift.
+    text, count = re.subn(
+        r'signingConfig\s*=\s*signingConfigs(?:\.debug|\.getByName\("debug"\))',
+        'signingConfig = signingConfigs.getByName("oglRelease")', text)
+    if count != 1 or text.count('android {') != 1:
+        raise ValueError('Cannot locate the Flutter release signing configuration')
+    config = '''// OGL_PLATFORM_SPEC fixedSigning
+val oglSigningProperties = java.util.Properties().apply {
+    val configFile = rootProject.file("key.properties")
+    require(configFile.isFile) { "Missing fixed Android signing: run tool/android_signing.py prepare" }
+    configFile.inputStream().use { load(it) }
+}
+fun oglSigningProperty(name: String): String =
+    requireNotNull(oglSigningProperties.getProperty(name)?.takeIf { it.isNotBlank() }) {
+        "Missing Android signing property: $name"
+    }
+require(file(oglSigningProperty("storeFile")).isFile) { "Android signing keystore is missing" }
+
+'''
+    text = text.replace('android {', config + '''android {
+    signingConfigs {
+        create("oglRelease") {
+            storeFile = file(oglSigningProperty("storeFile"))
+            storePassword = oglSigningProperty("storePassword")
+            keyAlias = oglSigningProperty("keyAlias")
+            keyPassword = oglSigningProperty("keyPassword")
+        }
+    }
+    buildTypes.getByName("debug").signingConfig = signingConfigs.getByName("oglRelease")
+''', 1)
+    _write(path, text)
+    return 0
+
+
 def patch_compile_sdk(root: str, step: dict) -> int:
     """把宿主 compileSdk 抬到插件要求的版本。
 
@@ -582,6 +625,7 @@ def patch_write_png(root: str, step: dict) -> int:
 
 
 PATCHES = {
+    'android_signing': patch_android_signing,
     'compile_sdk': patch_compile_sdk,
     'core_library_desugaring': patch_core_library_desugaring,
     'android_permissions': patch_android_permissions,

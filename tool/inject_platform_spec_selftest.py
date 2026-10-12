@@ -159,6 +159,15 @@ def main():
         manifest_text = read(manifest)
         check('compileSdk 已标记', 'OGL_PLATFORM_SPEC compileSdk' in gradle_text)
         check('desugaring 已标记', 'OGL_PLATFORM_SPEC desugaring' in gradle_text)
+        check('固定签名已注入', 'OGL_PLATFORM_SPEC fixedSigning' in gradle_text)
+        check('release 不再使用 debug 配置',
+              'signingConfig = signingConfigs.debug' not in gradle_text)
+        check('debug 与 release 共用固定签名',
+              'buildTypes.getByName("debug").signingConfig = signingConfigs.getByName("oglRelease")'
+              in gradle_text)
+        check('缺签名属性必须拒绝', 'require(configFile.isFile)' in gradle_text)
+        check('applicationId 保持不变',
+              'applicationId = "com.yingo.ohgithublost"' in gradle_text)
         # ★ 必须是 37：permission_handler_android 要求 37+（CI 实证）。
         check('compileSdk 已抬到 37',
               re.search(r'compileSdk\s*=\s*37', gradle_text) is not None,

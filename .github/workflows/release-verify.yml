@@ -104,11 +104,14 @@ jobs:
           ls -la
       - name: 核验
         shell: bash
+        env:
+          OGL_ANDROID_CERT_SHA256: ${{ secrets.OGL_ANDROID_CERT_SHA256 }}
         run: |
           python3 - <<'PY'
           import glob, os, re, subprocess, sys, zipfile
 
-          EXPECT_CERT = '3fcadb03954d74a92b736ce66969c51fb1d9052f1ccbc6fb84fd00080e33ab0b'
+          EXPECT_CERT = os.environ.get('OGL_ANDROID_CERT_SHA256', '').replace(':', '').lower()
+          assert re.fullmatch(r'[0-9a-f]{64}', EXPECT_CERT), '缺少 OGL_ANDROID_CERT_SHA256 Secret'
           tag = os.environ['TAG']
           expect_version = re.sub(r'^v', '', tag)
 
@@ -132,6 +135,7 @@ jobs:
           for apk in apks:
               out = subprocess.run([apksigner, 'verify', '--print-certs', apk],
                                    capture_output=True, text=True)
+              assert out.returncode == 0, 'apksigner 校验失败: %s' % apk
               blob = (out.stdout + out.stderr).replace(':', '').replace(' ', '').lower()
               assert EXPECT_CERT in blob, '证书指纹不匹配: %s' % apk
               badging = subprocess.run([aapt, 'dump', 'badging', apk],

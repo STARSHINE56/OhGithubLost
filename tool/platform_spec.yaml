@@ -32,6 +32,17 @@
 #
 spec_version: 1
 specs:
+  - target: android
+    id: android-fixed-signing
+    job: android-fixed-signing
+    why: >
+      Android APK/AAB signing is a Gradle build-time operation. Both preview and
+      release must use the same private keystore restored from Actions Secrets;
+      missing configuration must fail rather than generate a runner debug key.
+    steps:
+      - file: android/app/build.gradle.kts
+        marker: "OGL_PLATFORM_SPEC fixedSigning"
+        patch: android_signing
 
 # ============================================================================
 # Android
