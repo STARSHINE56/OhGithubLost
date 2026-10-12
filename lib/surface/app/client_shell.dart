@@ -51,6 +51,14 @@ enum OgLShellTab {
   profile,
 }
 
+/// 手机与桌面共用的可见导航顺序；不能直接把枚举下标当作目的地下标。
+List<OgLShellTab> ogLVisibleShellTabs({required bool hasAi}) => <OgLShellTab>[
+  OgLShellTab.home,
+  OgLShellTab.search,
+  if (hasAi) OgLShellTab.ai,
+  OgLShellTab.profile,
+];
+
 /// 客户端主壳（含登录门）。
 class OgLClientShell extends StatefulWidget {
   /// 创建主壳。
@@ -464,7 +472,12 @@ class _OgLClientShellState extends State<OgLClientShell>
             ? TickerMode(enabled: tab == _tab, child: _pageFor(tab))
             : const SizedBox.shrink(),
     ];
-    final int index = OgLShellTab.values.indexOf(_tab);
+    final List<OgLShellTab> tabs = ogLVisibleShellTabs(
+      hasAi: widget.surface.hasAi,
+    );
+    final OgLShellTab selected = tabs.contains(_tab) ? _tab : tabs.first;
+    final int index = OgLShellTab.values.indexOf(selected);
+    final int navigationIndex = tabs.indexOf(selected);
     // R7：页面切换加**左右滑动**入场动画（保留 IndexedStack 的状态与懒挂载）。
     // 关闭动画（档位 0 / 系统减少动效）时瞬时切换。
     final Widget body = _OgLShellSlide(
@@ -481,9 +494,8 @@ class _OgLClientShellState extends State<OgLClientShell>
         drawer: _drawer(),
         body: body,
         bottomNavigationBar: NavigationBar(
-          selectedIndex: index,
-          onDestinationSelected: (int value) =>
-              _select(OgLShellTab.values[value]),
+          selectedIndex: navigationIndex,
+          onDestinationSelected: (int value) => _select(tabs[value]),
           destinations: <NavigationDestination>[
             NavigationDestination(
               icon: const Icon(Icons.folder_outlined),
@@ -525,9 +537,8 @@ class _OgLClientShellState extends State<OgLClientShell>
                     icon: const Icon(Icons.menu),
                   )
                 : null,
-            selectedIndex: index,
-            onDestinationSelected: (int value) =>
-                _select(OgLShellTab.values[value]),
+            selectedIndex: navigationIndex,
+            onDestinationSelected: (int value) => _select(tabs[value]),
             extended: extended,
             labelType: extended
                 ? NavigationRailLabelType.none
@@ -542,11 +553,12 @@ class _OgLClientShellState extends State<OgLClientShell>
                 icon: const Icon(Icons.search),
                 label: Text(OgLI18n.instance.t('shell', 'search')),
               ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.auto_awesome_outlined),
-                selectedIcon: const Icon(Icons.auto_awesome),
-                label: const Text('AI'),
-              ),
+              if (widget.surface.hasAi)
+                NavigationRailDestination(
+                  icon: const Icon(Icons.auto_awesome_outlined),
+                  selectedIcon: const Icon(Icons.auto_awesome),
+                  label: const Text('AI'),
+                ),
               NavigationRailDestination(
                 icon: const Icon(Icons.person_outline),
                 selectedIcon: const Icon(Icons.person),
@@ -641,17 +653,15 @@ class _OgLShellSlideState extends State<_OgLShellSlide>
       // 一点点透明度变化就足以让切换"活"起来，成本几乎为零。
       builder: (BuildContext context, Widget? child) {
         final double t = _controller.value;
-        return RepaintBoundary(
-          child: Opacity(
-            opacity: (0.7 + 0.3 * t).clamp(0.0, 1.0),
-            child: FractionalTranslation(
-              translation: Offset(_from * (1 - t), 0),
-              child: child,
-            ),
+        return Opacity(
+          opacity: (0.7 + 0.3 * t).clamp(0.0, 1.0),
+          child: FractionalTranslation(
+            translation: Offset(_from * (1 - t), 0),
+            child: child,
           ),
         );
       },
-      child: widget.child,
+      child: RepaintBoundary(child: widget.child),
     );
   }
 }
