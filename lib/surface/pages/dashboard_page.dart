@@ -183,7 +183,7 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
       floatingActionButton: AnimatedSlide(
         offset: _showFab ? Offset.zero : const Offset(0, 2),
-        duration: const Duration(milliseconds: 200),
+        duration: OgLAnim.fast(context),
         child: FloatingActionButton.extended(
           onPressed: _createRepo,
           icon: const Icon(Icons.add),
