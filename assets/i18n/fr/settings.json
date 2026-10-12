@@ -163,5 +163,13 @@
   "accountGroup": "Account",
   "aboutGroup": "À propos et soutien",
   "assistantGroup": "Assistant IA",
-  "maintenanceGroup": "Application et maintenance"
+  "maintenanceGroup": "Application et maintenance",
+  "groupInterface": "Interface",
+  "groupStorageNetwork": "Stockage et réseau",
+  "groupAboutHelp": "À propos et aide",
+  "dangerZone": "Zone sensible",
+  "expandGroup": "Développer",
+  "collapseGroup": "Réduire",
+  "logsSaving": "Écriture sur disque active",
+  "logsLineCount": "{count} lignes"
 }

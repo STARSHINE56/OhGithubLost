@@ -163,5 +163,13 @@
   "accountGroup": "Account",
   "aboutGroup": "About & support",
   "assistantGroup": "AI assistant",
-  "maintenanceGroup": "App & maintenance"
+  "maintenanceGroup": "App & maintenance",
+  "groupInterface": "Interface",
+  "groupStorageNetwork": "Storage & network",
+  "groupAboutHelp": "About & help",
+  "dangerZone": "Danger zone",
+  "expandGroup": "Expand",
+  "collapseGroup": "Collapse",
+  "logsSaving": "Saving to disk",
+  "logsLineCount": "{count} lines"
 }

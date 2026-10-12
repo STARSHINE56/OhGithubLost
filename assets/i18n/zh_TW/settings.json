@@ -163,5 +163,13 @@
   "accountGroup": "Account",
   "aboutGroup": "關於與支援",
   "assistantGroup": "AI 助手",
-  "maintenanceGroup": "應用與維護"
+  "maintenanceGroup": "應用與維護",
+  "groupInterface": "介面",
+  "groupStorageNetwork": "儲存與網路",
+  "groupAboutHelp": "關於與說明",
+  "dangerZone": "危險區",
+  "expandGroup": "展開",
+  "collapseGroup": "收合",
+  "logsSaving": "已寫入磁碟",
+  "logsLineCount": "{count} 行"
 }

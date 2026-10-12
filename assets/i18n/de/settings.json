@@ -163,5 +163,13 @@
   "accountGroup": "Account",
   "aboutGroup": "Info & Unterstützung",
   "assistantGroup": "KI-Assistent",
-  "maintenanceGroup": "App & Wartung"
+  "maintenanceGroup": "App & Wartung",
+  "groupInterface": "Oberfläche",
+  "groupStorageNetwork": "Speicher & Netzwerk",
+  "groupAboutHelp": "Über & Hilfe",
+  "dangerZone": "Gefahrenbereich",
+  "expandGroup": "Erweitern",
+  "collapseGroup": "Einklappen",
+  "logsSaving": "Wird protokolliert",
+  "logsLineCount": "{count} Zeilen"
 }

@@ -163,5 +163,13 @@
   "accountGroup": "Account",
   "aboutGroup": "О приложении и поддержка",
   "assistantGroup": "ИИ-помощник",
-  "maintenanceGroup": "Приложение и обслуживание"
+  "maintenanceGroup": "Приложение и обслуживание",
+  "groupInterface": "Интерфейс",
+  "groupStorageNetwork": "Хранилище и сеть",
+  "groupAboutHelp": "О программе и справка",
+  "dangerZone": "Опасная зона",
+  "expandGroup": "Развернуть",
+  "collapseGroup": "Свернуть",
+  "logsSaving": "Запись в файл включена",
+  "logsLineCount": "Строк: {count}"
 }

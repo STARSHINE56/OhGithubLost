@@ -163,5 +163,13 @@
   "accountGroup": "账户",
   "aboutGroup": "关于与支持",
   "assistantGroup": "AI 助手",
-  "maintenanceGroup": "应用与维护"
+  "maintenanceGroup": "应用与维护",
+  "groupInterface": "界面",
+  "groupStorageNetwork": "存储与网络",
+  "groupAboutHelp": "关于与帮助",
+  "dangerZone": "危险区",
+  "expandGroup": "展开",
+  "collapseGroup": "收起",
+  "logsSaving": "已落盘",
+  "logsLineCount": "{count} 行"
 }
