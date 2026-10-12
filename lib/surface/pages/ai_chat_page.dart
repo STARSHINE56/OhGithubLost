@@ -12,6 +12,7 @@ import '../types.dart';
 import '../util/link_opener.dart';
 import 'ai_confirmation.dart';
 import 'ai_settings_page.dart';
+import 'download_manager_page.dart';
 
 class AiChatPage extends StatefulWidget {
   const AiChatPage({
@@ -156,8 +157,7 @@ class _AiChatPageState extends State<AiChatPage> {
     try {
       await widget.surface.downloadAiArtifact(artifact);
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(aiText('downloadQueued'))));
+        ogLShowDownloadQueued(context, widget.surface, aiText('downloadQueued'));
       }
     } catch (e) {
       if (mounted) {
