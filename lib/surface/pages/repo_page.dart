@@ -2512,20 +2512,54 @@ class _PullsTabState extends State<_PullsTab> {
             builder: (BuildContext context, Widget? _) => _pagedBody<Map<String, dynamic>>(
               context,
               _paged,
-              (BuildContext context, Map<String, dynamic> item, int index) => ListTile(
-                leading: const Icon(Icons.call_merge),
-                title: Text(
-                  '#${ghInt(item, 'number')} ${ghStr(item, 'title')}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              (BuildContext context, Map<String, dynamic> item, int index) => Card(
+                elevation: 1,
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: InkWell(
+                  onTap: () => _openPull(item),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.call_merge,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '#${ghInt(item, 'number')} ${ghStr(item, 'title')}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w500),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'by ${ghLogin(item)} · ${ghDate(item, 'created_at')}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                subtitle: Text(
-                  'by ${ghLogin(item)} · ${ghDate(item, 'created_at')}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => _openPull(item),
               ),
               emptyIcon: Icons.call_merge,
               emptyText: _state == 'all' ? _t('noPulls') : _t('noPullsFiltered'),
