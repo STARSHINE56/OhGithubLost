@@ -28,9 +28,11 @@ import '../i18n/og_l_i18n.dart';
 import 'system_notifier.dart';
 
 /// 取 `shell` 分片文案。
-String _t(String key, [Map<String, Object?>? args]) =>
-    OgLI18n.instance.t('shell', key,
-        args: args?.map((String k, Object? v) => MapEntry<String, String>(k, '$v')));
+String _t(String key, [Map<String, Object?>? args]) => OgLI18n.instance.t(
+  'shell',
+  key,
+  args: args?.map((String k, Object? v) => MapEntry<String, String>(k, '$v')),
+);
 
 /// 通知严重级别。
 enum OgLNoticeSeverity {
@@ -44,18 +46,11 @@ enum OgLNoticeSeverity {
   critical,
 }
 
-/// 通知的**投递方式**（用户要求：用参数决定走哪些通道）。
-///
-/// **接线状态**：`delivery` 参数目前**尚未接线** —— 所有调用点都使用默认值
-/// [auto]，没有任何调用方传 [inAppOnly] / [allChannels]。枚举与参数保留，
-/// 供将来对"后台系统通知"做显式控制时逐个改调用点；在接线之前，行为等同
-/// [auto]（critical 后台投系统通知、其余按级别展示）。
-///
-/// - [auto]：按严重级别自动决定（critical → 弹窗；其余 → 横幅）；
-/// - [inAppOnly]：**只在应用内**提示（前台横幅 / 弹窗），不尝试系统通知；
-/// - [allChannels]：**三种方式全用** —— 前台弹窗/横幅 + 同时投系统通知，
-///   保证用户切到后台也能看到（如"下载完成""长时间任务结束"）。
+/// 通知的投递方式：默认收纳进应用日志，主动操作可显式请求即时反馈。
 enum OgLNoticeDelivery {
+  /// 收纳到通知中心，不弹窗、不投递系统通知。
+  logOnly,
+
   /// 按级别自动。
   auto,
 
@@ -73,7 +68,7 @@ class OgLNotice {
     required this.title,
     this.detail,
     this.severity = OgLNoticeSeverity.warning,
-    this.delivery = OgLNoticeDelivery.auto,
+    this.delivery = OgLNoticeDelivery.logOnly,
   });
 
   /// 标题（一行说清发生了什么）。
@@ -118,13 +113,12 @@ class OgLNoticeCenter extends ChangeNotifier {
   /// 去重：相同的 `title + detail` 已在队列里时不再重复入队
   /// （避免同一个异常每帧上报刷屏），**也不重复落盘**。
   ///
-  /// [delivery]：投递方式；**当前所有调用点都走默认的 [OgLNoticeDelivery.auto]**
-  /// （参数尚未接线，见该枚举的说明）。
+  /// [delivery]：默认仅收纳，主动操作需要即时反馈时显式选择通道。
   void report({
     required String title,
     String? detail,
     OgLNoticeSeverity severity = OgLNoticeSeverity.warning,
-    OgLNoticeDelivery delivery = OgLNoticeDelivery.auto,
+    OgLNoticeDelivery delivery = OgLNoticeDelivery.logOnly,
   }) {
     // 去重在前：相同的 `title + detail` 已在待展示队列里时，**直接返回** ——
     // 既不再入队，也不重复落盘。否则同一个异常每帧上报会把磁盘日志刷爆，
@@ -134,18 +128,13 @@ class OgLNoticeCenter extends ChangeNotifier {
         return;
       }
     }
-    // 落盘在后：走到这里的都是**新的**通知；它可能因为"正在弹窗"而延后
-    // 展示，但绝不允许丢失（磁盘留痕）。
-    OgLLogFile.line(
+    OgLAppLog.instance.add(
       _t('notification'),
       detail == null || detail.isEmpty ? title : '$title：$detail',
-      level: severity == OgLNoticeSeverity.critical
-          ? 'ERR'
-          : severity == OgLNoticeSeverity.warning
-              ? 'WARN'
-              : 'INFO',
+      severity: severity,
     );
-    if (_pending.length >= maxPending) {
+    if (delivery != OgLNoticeDelivery.logOnly &&
+        _pending.length >= maxPending) {
       final dropIndex = _pending.indexWhere(
         (OgLNotice n) => n.severity != OgLNoticeSeverity.critical,
       );
@@ -157,7 +146,9 @@ class OgLNoticeCenter extends ChangeNotifier {
       severity: severity,
       delivery: delivery,
     );
-    _pending.add(notice);
+    if (delivery != OgLNoticeDelivery.logOnly) {
+      _pending.add(notice);
+    }
     _history.insert(0, notice);
     while (_history.length > 200) {
       _history.removeLast();
@@ -227,12 +218,14 @@ class OgLAppLog extends ChangeNotifier {
     OgLNoticeSeverity severity = OgLNoticeSeverity.info,
     String? logLevel,
   }) {
-    _entries.add(OgLAppLogEntry(
-      at: DateTime.now(),
-      area: area,
-      message: message,
-      severity: severity,
-    ));
+    _entries.add(
+      OgLAppLogEntry(
+        at: DateTime.now(),
+        area: area,
+        message: message,
+        severity: severity,
+      ),
+    );
     while (_entries.length > maxEntries) {
       _entries.removeAt(0);
     }
@@ -240,12 +233,13 @@ class OgLAppLog extends ChangeNotifier {
     OgLLogFile.line(
       area,
       message,
-      level: logLevel ??
+      level:
+          logLevel ??
           (severity == OgLNoticeSeverity.critical
               ? 'ERR'
               : severity == OgLNoticeSeverity.warning
-                  ? 'WARN'
-                  : 'INFO'),
+              ? 'WARN'
+              : 'INFO'),
     );
   }
 
@@ -339,10 +333,13 @@ class OgLAppLogEntry {
 
   /// 时间。
   final DateTime at;
+
   /// 区域（认证 / 仓库 / …）。
   final String area;
+
   /// 正文（含原始异常与堆栈）。
   final String message;
+
   /// 级别。
   final OgLNoticeSeverity severity;
 
@@ -365,11 +362,7 @@ class OgLAppLogEntry {
 /// Navigator 的 context 来完成；未提供（或尚未就绪）时降级为横幅，绝不静默。
 class OgLNoticeHost extends StatefulWidget {
   /// 创建宿主。
-  const OgLNoticeHost({
-    required this.child,
-    this.navigatorKey,
-    super.key,
-  });
+  const OgLNoticeHost({required this.child, this.navigatorKey, super.key});
 
   /// 被包裹的应用内容。
   final Widget child;
@@ -392,7 +385,8 @@ class _OgLNoticeHostState extends State<OgLNoticeHost>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _foreground = WidgetsBinding.instance.lifecycleState == null ||
+    _foreground =
+        WidgetsBinding.instance.lifecycleState == null ||
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     OgLNoticeCenter.instance.addListener(_drain);
     WidgetsBinding.instance.addPostFrameCallback((_) => _drain());
@@ -457,10 +451,9 @@ class _OgLNoticeHostState extends State<OgLNoticeHost>
   /// - 同时**落盘 + 记入应用日志**，即便系统通道不可用也不会丢消息；
   /// - 回到前台后，[_drain] 仍会把排队中的应用内提示补发出来。
   void _emitSystemNotice(OgLNotice notice) {
-    final String text =
-        notice.detail == null || notice.detail!.isEmpty
-            ? notice.title
-            : '${notice.title}：${notice.detail}';
+    final String text = notice.detail == null || notice.detail!.isEmpty
+        ? notice.title
+        : '${notice.title}：${notice.detail}';
     OgLLogFile.line(
       _t('notification'),
       _t('systemChannel', {'text': text}),
@@ -471,10 +464,9 @@ class _OgLNoticeHostState extends State<OgLNoticeHost>
       _t('systemChannel', {'text': text}),
       severity: notice.severity,
     );
-    unawaited(OgLSystemNotifier.instance.show(
-      title: notice.title,
-      body: notice.detail,
-    ));
+    unawaited(
+      OgLSystemNotifier.instance.show(title: notice.title, body: notice.detail),
+    );
   }
 
   /// 严重：弹窗（必须被阅读）。
@@ -509,7 +501,7 @@ class _OgLNoticeHostState extends State<OgLNoticeHost>
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child:  Text(_t('gotIt')),
+              child: Text(_t('gotIt')),
             ),
           ],
         ),
@@ -557,7 +549,9 @@ class OgLDiagnosticsNoticeSink implements KernelLogSink {
     OgLNoticeCenter.instance.report(
       title: entry.message,
       detail: entry.code == null ? entry.tag : '${entry.tag} · ${entry.code}',
-      severity: isError ? OgLNoticeSeverity.critical : OgLNoticeSeverity.warning,
+      severity: isError
+          ? OgLNoticeSeverity.critical
+          : OgLNoticeSeverity.warning,
     );
   }
 }
