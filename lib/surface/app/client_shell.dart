@@ -308,21 +308,8 @@ class _OgLClientShellState extends State<OgLClientShell>
                     ],
                   ),
                 ),
-                // 底部 AI 按钮
-                Container(
-                  margin: const EdgeInsets.all(16),
-                  child: FilledButton.icon(
-                    onPressed: () {
-                      _scaffoldKey.currentState?.closeDrawer();
-                      _openFeature(AiChatPage(surface: widget.surface));
-                    },
-                    icon: const Icon(Icons.auto_awesome),
-                    label: Text(aiText('title')),
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(double.infinity, 48),
-                    ),
-                  ),
-                ),
+                // 底部留白
+                const SizedBox(height: 16),
               ],
             ),
           ),
