@@ -260,6 +260,23 @@ class _ProfilePageState extends State<ProfilePage> {
               ),
             ),
             const SizedBox(height: 16),
+            // 设置入口
+            Card(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              child: ListTile(
+                leading: const Icon(Icons.settings_outlined),
+                title: const Text('设置'),
+                subtitle: const Text('外观、网络、账户、关于'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => SettingsPage(surface: widget.surface, report: widget.report),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
              Padding(
               padding: EdgeInsets.fromLTRB(16, 0, 16, 4),
               child: Text(_t('content')),
