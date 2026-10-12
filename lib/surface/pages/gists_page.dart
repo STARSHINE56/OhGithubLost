@@ -161,12 +161,56 @@ class _GistsPageState extends State<GistsPage> {
               final bool isPublic = gist['public'] == true;
               return OgLReveal(
                 delay: OgLAnim.staggerOf(context, index),
-                child: ListTile(
-                leading: const Icon(Icons.article_outlined),
-                title: Text(
-                  _titleOf(gist),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: Card(
+                  elevation: 1,
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: InkWell(
+                    onTap: () => unawaited(_openDetail(gist)),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.article_outlined,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _titleOf(gist),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontWeight: FontWeight.w500),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${_t('fileCount', {'count': _fileCountOf(gist)})}'
+                                  '${isPublic ? _t('public') : _t('private')} · '
+                                  '${ghDate(gist, 'updated_at')}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.open_in_new),
+                            tooltip: _t('openInBrowser'),
+                            onPressed: () => unawaited(_openInBrowser(gist)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
                 subtitle: Text(
                   '${_t('fileCount', {'count': _fileCountOf(gist)})}'
