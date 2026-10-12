@@ -215,10 +215,11 @@ class _DashboardPageState extends State<DashboardPage> {
                 return RefreshIndicator(
                   onRefresh: p.refresh,
                   child: ListView.separated(
+                    padding: const EdgeInsets.only(bottom: 80), // 底部留白，不让 FAB 挡住
                     physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: p.items.length + (p.done ? 0 : 1),
                     separatorBuilder: (BuildContext context, int index) =>
-                        const Divider(height: 1),
+                        const SizedBox.shrink(),
                     itemBuilder: (BuildContext context, int index) {
                       if (index == p.items.length) {
                         return Padding(
