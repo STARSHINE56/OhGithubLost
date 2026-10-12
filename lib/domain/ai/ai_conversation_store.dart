@@ -25,7 +25,12 @@ class AiConversationStore {
 
   Future<List<String>> _index(String user) async {
     final raw = await vault.readSecret(_indexKey(user));
-    if (raw != null) return (jsonDecode(raw) as List).cast<String>();
+    if (raw != null) {
+      final ids = (jsonDecode(raw) as List).cast<String>();
+      // 上次可能已提交索引但清理失败；重试清理，不能永久保留旧私有快照。
+      await vault.deleteSecret('ai.chats.$user');
+      return ids;
+    }
     final legacy = await vault.readSecret('ai.chats.$user');
     final chats = legacy == null
         ? <AiConversation>[]

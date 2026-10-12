@@ -1,9 +1,36 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ohgithublost/domain/ai/ai_models.dart';
 import 'package:ohgithublost/domain/ai/ai_service.dart';
 import 'package:ohgithublost/kernel/contract/disk_store.dart';
 
 void main() {
+  test('a delayed bound response is rejected after switching accounts', () async {
+    var user = 'alice';
+    final sent = Completer<void>();
+    final response = Completer<Object?>();
+    final service = AiService(
+      store: InMemoryKv(), vault: InMemoryVault(),
+      github: (_, __, ___, ____) async => throw StateError('unbound'),
+      accountGithub: (id, method, path, body, query) {
+        expect(id, 'alice');
+        sent.complete();
+        return response.future;
+      },
+      provider: (_, __, ___, ____) async => {},
+      account: () async => user,
+    );
+    final operation = service.executeProposal(AiProposal(
+      operation: 'create_issue', accountId: 'alice', repo: 'owner/repo',
+      branch: 'main', payload: {'title': 'Issue'}), (_) async => true);
+    final assertion = expectLater(operation, throwsA(isA<AiException>()));
+    await sent.future;
+    user = 'bob';
+    response.complete({'number': 1});
+    await assertion;
+  });
+
   test('model cache is isolated, refreshable, and invalidated by saved keys', () async {
     var requests = 0;
     final service = AiService(
