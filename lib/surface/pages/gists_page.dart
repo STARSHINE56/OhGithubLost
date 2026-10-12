@@ -212,20 +212,6 @@ class _GistsPageState extends State<GistsPage> {
                     ),
                   ),
                 ),
-                subtitle: Text(
-                  '${_t('fileCount', {'count': _fileCountOf(gist)})}'
-                  '${isPublic ? _t('public') : _t('private')} · '
-                  '${ghDate(gist, 'updated_at')}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: IconButton(
-                  icon: const Icon(Icons.open_in_new),
-                  tooltip: _t('openInBrowser'),
-                  onPressed: () => unawaited(_openInBrowser(gist)),
-                ),
-                onTap: () => unawaited(_openDetail(gist)),
-                ),
               );
             },
           ),
