@@ -21,7 +21,6 @@ library;
 
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -230,6 +229,7 @@ class _SettingsPageState extends State<SettingsPage> {
         builder: (BuildContext _) => SettingsSectionPage(
           title: title,
           collapseState: _openGroups,
+          settingsChanges: _settings,
           builders: builders,
         ),
       ),
@@ -535,7 +535,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 subtitle: _interfaceSummary(value),
                 onTap: () => _openSection(
                   _t('groupInterface'),
-                  <Widget Function()>[() => _interfaceGroup(value)],
+                  <Widget Function()>[() => _interfaceGroup(_settings.settings)],
                 ),
               ),
               _categoryTile(
@@ -545,7 +545,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 subtitle: _codeSummary(value),
                 onTap: () => _openSection(
                   _t('codeAndFiles'),
-                  <Widget Function()>[() => _codeGroup(context, theme, value)],
+                  <Widget Function()>[() => _codeGroup(context, Theme.of(context), _settings.settings)],
                 ),
               ),
               _categoryTile(
@@ -554,7 +554,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 title: _t('groupStorageNetwork'),
                 onTap: () => _openSection(
                   _t('groupStorageNetwork'),
-                  <Widget Function()>[() => _storageGroup(theme, value)],
+                  <Widget Function()>[() => _storageGroup(Theme.of(context), _settings.settings)],
                 ),
               ),
               if (widget.surface.hasAi) _categoryTile(

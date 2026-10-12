@@ -7,7 +7,6 @@
 /// 时这里重建、重新执行 builder，`OgLSettingsGroup` 的 `expanded` 随之更新。
 library;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// 设置分区页。
@@ -16,6 +15,7 @@ class SettingsSectionPage extends StatelessWidget {
     required this.title,
     required this.collapseState,
     required this.builders,
+    this.settingsChanges,
     super.key,
   });
 
@@ -26,14 +26,15 @@ class SettingsSectionPage extends StatelessWidget {
 
   /// 每个 builder 返回一个 `OgLSettingsGroup`（现建，读到最新 `expanded`）。
   final List<Widget Function()> builders;
+  final Listenable? settingsChanges;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(title)),
-      body: ValueListenableBuilder<Set<String>>(
-        valueListenable: collapseState,
-        builder: (BuildContext context, Set<String> _, Widget? __) => ListView(
+      body: ListenableBuilder(
+        listenable: Listenable.merge([collapseState, settingsChanges]),
+        builder: (BuildContext context, Widget? _) => ListView(
           padding: const EdgeInsets.all(16),
           children: <Widget>[for (final Widget Function() b in builders) b()],
         ),
