@@ -1809,26 +1809,37 @@ class _CodeTabState extends State<_CodeTab> {
     if (md == null || md.trim().isEmpty) {
       return const SizedBox.shrink();
     }
-    // 一次求值：取法判定（含加速范围判断）不该在同一个 build 里跑两遍 ——
-    // 两次调用之间若设置变化，会拿到不自洽的 base / proxy 组合。
     final ({Uri? base, String? proxy, Future<Map<String, String>>? headers})
         plan = _readmeImagePlan('');
-    return ExpansionTile(
-      title: const Text('README'),
-      subtitle:  Text(_t('expandCollapse')),
-      childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      children: <Widget>[
-        ReadmeView(
-          markdown: md,
-          imageBase: plan.base,
-          imageProxyPrefix: plan.proxy,
-          imageHeaders: plan.headers,
-          imageLoader: (String p) => _readImageBytes(_repoPath('', p)),
-          onOpenLink: (Uri uri) {
-            unawaited(openExternalLink(uri, tag: 'README'));
-          },
-        ),
-      ],
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          // README 标题栏
+          ListTile(
+            leading: Icon(Icons.description_outlined,
+                color: Theme.of(context).colorScheme.onSurfaceVariant),
+            title: const Text('README.md'),
+            dense: true,
+          ),
+          const Divider(height: 1),
+          // README 内容
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: ReadmeView(
+              markdown: md,
+              imageBase: plan.base,
+              imageProxyPrefix: plan.proxy,
+              imageHeaders: plan.headers,
+              imageLoader: (String p) => _readImageBytes(_repoPath('', p)),
+              onOpenLink: (Uri uri) {
+                unawaited(openExternalLink(uri, tag: 'README'));
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
