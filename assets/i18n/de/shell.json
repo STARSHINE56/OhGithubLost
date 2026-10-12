@@ -65,5 +65,8 @@
   "minimizeWindow": "Minimieren",
   "maximizeWindow": "Maximieren",
   "restoreWindow": "Wiederherstellen",
-  "closeWindow": "Schließen"
+  "closeWindow": "Schließen",
+  "appSlogan": "GitHub Client",
+  "mainNav": "Main Navigation",
+  "tools": "Tools"
 }
