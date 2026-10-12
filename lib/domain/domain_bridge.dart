@@ -58,10 +58,10 @@ class DomainBridge {
     RepoFileService? repoFiles,
     this.ai,
     this.productivity,
-  })  : downloads = downloads ?? IxDownloadManager(),
-        actionLogs = actionLogs ?? IxActionLogs(tokenProvider: () async => null),
-        presign = presign ?? IxPresign(tokenProvider: () async => null),
-        _repoFiles = repoFiles ?? RepoFileService(api: api);
+  }) : downloads = downloads ?? IxDownloadManager(),
+       actionLogs = actionLogs ?? IxActionLogs(tokenProvider: () async => null),
+       presign = presign ?? IxPresign(tokenProvider: () async => null),
+       _repoFiles = repoFiles ?? RepoFileService(api: api);
 
   /// AI 与体验服务在真实装配时提供；可选参数保持既有测试兼容。
   final AiService? ai;
@@ -122,10 +122,7 @@ class DomainBridge {
 /// 提供：`gh.auth` / `gh.client` / `gh.api`。
 class GhModule extends OgLModule {
   /// 创建模块。
-  GhModule({
-    this.maxConcurrent = 4,
-    this.baseUrl = 'https://api.github.com',
-  });
+  GhModule({this.maxConcurrent = 4, this.baseUrl = 'https://api.github.com'});
 
   /// 请求并发上限。
   final int maxConcurrent;
@@ -140,13 +137,13 @@ class GhModule extends OgLModule {
 
   @override
   ModuleDescriptor get descriptor => const ModuleDescriptor(
-        id: 'domain.gh',
-        layer: ModuleLayer.domain,
-        version: '0.1.0',
-        requires: <String>['base.layer'],
-        provides: <String>['gh.auth', 'gh.client', 'gh.api'],
-        description: '中枢·API 逻辑（认证 / 请求 / 端点封装 / CacheRemote 适配）',
-      );
+    id: 'domain.gh',
+    layer: ModuleLayer.domain,
+    version: '0.1.0',
+    requires: <String>['base.layer'],
+    provides: <String>['gh.auth', 'gh.client', 'gh.api'],
+    description: '中枢·API 逻辑（认证 / 请求 / 端点封装 / CacheRemote 适配）',
+  );
 
   @override
   Future<void> onRegister(KernelContext context) async {
@@ -182,33 +179,38 @@ class GhModule extends OgLModule {
     // ★ R4：只读端点缓存（releases / branches / commits / issues / pulls /
     //   Actions / 仓库详情 …）。与底座一致性缓存互补：前者面向文件内容，
     //   这里面向"可容忍短暂陈旧的只读列表 / 详情"，账号维度隔离，切号即清。
-    client.attachReadCache(GhReadCache(
-      store: base.disk.kv,
-      accountId: () async => (await auth.activeAccountId()) ?? 'guest',
-      diagnostics: context.diagnostics,
-    ));
+    client.attachReadCache(
+      GhReadCache(
+        store: base.disk.kv,
+        accountId: () async => (await auth.activeAccountId()) ?? 'guest',
+        diagnostics: context.diagnostics,
+      ),
+    );
 
     // ★ 失败写入重放（D8）：把上次中断的写入在启动后补做。
     // 只依赖磁盘上的提交日志，失败不阻断启动（记录后照常进入界面）。
     unawaited(
-      base.disk.cache.replayPending().then((outcomes) {
-        final int ok = outcomes.where((o) => o.ok).length;
-        context.diagnostics.info(
-          'CONS',
-          '失败写入重放完成',
-          code: 'OGL-CONS-REPLAY',
-          data: <String, Object?>{
-            'replayed': outcomes.length,
-            'succeeded': ok,
-          },
-        );
-      }).catchError((Object error) {
-        context.diagnostics.warn(
-          'CONS',
-          '失败写入重放异常：$error',
-          code: 'OGL-CONS-REPLAY-ERR',
-        );
-      }),
+      base.disk.cache
+          .replayPending()
+          .then((outcomes) {
+            final int ok = outcomes.where((o) => o.ok).length;
+            context.diagnostics.info(
+              'CONS',
+              '失败写入重放完成',
+              code: 'OGL-CONS-REPLAY',
+              data: <String, Object?>{
+                'replayed': outcomes.length,
+                'succeeded': ok,
+              },
+            );
+          })
+          .catchError((Object error) {
+            context.diagnostics.warn(
+              'CONS',
+              '失败写入重放异常：$error',
+              code: 'OGL-CONS-REPLAY-ERR',
+            );
+          }),
     );
 
     context.di.register<GhAuthService>(auth);
@@ -239,11 +241,11 @@ class SysModule extends OgLModule {
     MemoryProbe? memoryProbe,
     SysNetworkSource? networkSource,
     bool installDefaultAppProbe = true,
-  })  : _androidProbe = androidProbe,
-        _appProbe = appProbe,
-        _memoryProbe = memoryProbe,
-        _networkSource = networkSource,
-        _installDefaultAppProbe = installDefaultAppProbe;
+  }) : _androidProbe = androidProbe,
+       _appProbe = appProbe,
+       _memoryProbe = memoryProbe,
+       _networkSource = networkSource,
+       _installDefaultAppProbe = installDefaultAppProbe;
 
   final AndroidProbe? _androidProbe;
   final AppProbe? _appProbe;
@@ -257,13 +259,13 @@ class SysModule extends OgLModule {
 
   @override
   ModuleDescriptor get descriptor => const ModuleDescriptor(
-        id: 'domain.sys',
-        layer: ModuleLayer.domain,
-        version: '0.1.0',
-        requires: <String>['base.layer'],
-        provides: <String>['sys.info', 'sys.access'],
-        description: '中枢·本地深层信息（设备/应用/环境）与 Mod 能力守门',
-      );
+    id: 'domain.sys',
+    layer: ModuleLayer.domain,
+    version: '0.1.0',
+    requires: <String>['base.layer'],
+    provides: <String>['sys.info', 'sys.access'],
+    description: '中枢·本地深层信息（设备/应用/环境）与 Mod 能力守门',
+  );
 
   @override
   Future<void> onRegister(KernelContext context) async {
@@ -309,13 +311,13 @@ class SysModule extends OgLModule {
 class IxModule extends OgLModule {
   @override
   ModuleDescriptor get descriptor => const ModuleDescriptor(
-        id: 'domain.ix',
-        layer: ModuleLayer.domain,
-        version: '0.1.0',
-        requires: <String>['domain.gh', 'domain.sys'],
-        provides: <String>['ix.session', 'ix.task', 'ix.notify', 'ix.download'],
-        description: '中枢·交互逻辑（会话 / 批量任务 / 冲突编排 / 通知 / 下载）',
-      );
+    id: 'domain.ix',
+    layer: ModuleLayer.domain,
+    version: '0.1.0',
+    requires: <String>['domain.gh', 'domain.sys'],
+    provides: <String>['ix.session', 'ix.task', 'ix.notify', 'ix.download'],
+    description: '中枢·交互逻辑（会话 / 批量任务 / 冲突编排 / 通知 / 下载）',
+  );
 
   /// 装配出的服务。
   late final IxSession session;
@@ -389,13 +391,13 @@ class IxModule extends OgLModule {
 class DomainLayerModule extends OgLModule {
   @override
   ModuleDescriptor get descriptor => const ModuleDescriptor(
-        id: 'domain.layer',
-        layer: ModuleLayer.domain,
-        version: '0.1.0',
-        requires: <String>['domain.gh', 'domain.ix', 'domain.sys'],
-        provides: <String>['domain.bridge'],
-        description: '中枢·层桥装配（API 逻辑 + 交互逻辑 → 单一出口）',
-      );
+    id: 'domain.layer',
+    layer: ModuleLayer.domain,
+    version: '0.1.0',
+    requires: <String>['domain.gh', 'domain.ix', 'domain.sys'],
+    provides: <String>['domain.bridge'],
+    description: '中枢·层桥装配（API 逻辑 + 交互逻辑 → 单一出口）',
+  );
 
   @override
   Future<void> onRegister(KernelContext context) async {
@@ -414,18 +416,63 @@ class DomainLayerModule extends OgLModule {
     // 两条通道分别注入：AI 密钥不经 GitHub 请求或镜像传输。
     final client = context.di.resolve<GhClient>();
     final base = BaseBridge.of(context.bridges);
-    Future<Object?> githubRequest(String method, String path, Map<String, Object?>? body, Map<String, String> query) async {
-      final response = await client.send(GhRequest(path: path,
-        method: NetMethod.values.firstWhere((e) => e.verb == method),
-        body: body, query: query, cacheBypass: true));
-      return response.body.trim().isEmpty ? <String, Object?>{} : jsonDecode(response.body);
+    Future<Object?> githubRequest(
+      String method,
+      String path,
+      Map<String, Object?>? body,
+      Map<String, String> query,
+    ) async {
+      final response = await client.send(
+        GhRequest(
+          path: path,
+          method: NetMethod.values.firstWhere((e) => e.verb == method),
+          body: body,
+          query: query,
+          cacheBypass: true,
+        ),
+      );
+      return response.body.trim().isEmpty
+          ? <String, Object?>{}
+          : jsonDecode(response.body);
     }
+
+    Future<Object?> notificationGithub(
+      String accountId,
+      String method,
+      String path,
+      Map<String, Object?>? body,
+      Map<String, String> query,
+    ) async {
+      final response = await client.send(
+        GhRequest(
+          path: path,
+          method: NetMethod.values.firstWhere((e) => e.verb == method),
+          body: body,
+          query: query,
+          cacheBypass: true,
+          expectedAccountId: accountId,
+        ),
+      );
+      return response.body.trim().isEmpty
+          ? <String, Object?>{}
+          : jsonDecode(response.body);
+    }
+
     final provider = AiProvider(AiHttpTransport().send);
     final bridge = DomainBridge(
-      ai: AiService(store: base.disk.kv, vault: base.disk.vault,
-        github: githubRequest, provider: provider.request, account: ghAuth.activeAccountId),
-      productivity: ProductivityService(store: base.disk.kv,
-        github: githubRequest, account: ghAuth.activeAccountId),
+      ai: AiService(
+        store: base.disk.kv,
+        vault: base.disk.vault,
+        github: githubRequest,
+        provider: provider.request,
+        account: ghAuth.activeAccountId,
+      ),
+      productivity: ProductivityService(
+        store: base.disk.kv,
+        notificationGithub: notificationGithub,
+        github: githubRequest,
+        account: ghAuth.activeAccountId,
+      ),
       auth: ghAuth,
       api: context.di.resolve<GhApi>(),
       client: context.di.resolve<GhClient>(),
@@ -459,13 +506,12 @@ List<OgLModule> domainLayerModules({
   GhModule? gh,
   SysModule? sys,
   IxModule? ix,
-}) =>
-    <OgLModule>[
-      sys ?? SysModule(),
-      gh ?? GhModule(),
-      ix ?? IxModule(),
-      DomainLayerModule(),
-    ];
+}) => <OgLModule>[
+  sys ?? SysModule(),
+  gh ?? GhModule(),
+  ix ?? IxModule(),
+  DomainLayerModule(),
+];
 
 /// 把批量任务的通道选择**真正落到网络底座**上（装配层使用）。
 ///
@@ -539,6 +585,7 @@ class _SysEnvProbe implements KernelEnvironmentProbe {
     );
   }
 }
+
 /// 装配根提供的**成品导出**实现（逻辑层只认契约，硬件层干活）。
 ///
 /// 存储②档（用户授权了 SAF 文件夹）时，把下载成品**粘贴**进该文件夹；
