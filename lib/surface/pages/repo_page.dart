@@ -2670,33 +2670,67 @@ class _ReleasesTabState extends State<_ReleasesTab> {
               if (release.isDraft) _t('draft'),
               if (release.isPrerelease) _t('prerelease'),
             ];
-            return ListTile(
-              leading: const Icon(Icons.new_releases_outlined),
-              title: Text(
-                release.tagName +
-                    (release.name == null || release.name!.isEmpty
-                        ? ''
-                        : ' · ${release.name}'),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+            return Card(
+              elevation: 1,
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: InkWell(
+                onTap: () => unawaited(_openDetail(release)),
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.new_releases_outlined,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              release.tagName +
+                                  (release.name == null || release.name!.isEmpty
+                                      ? ''
+                                      : ' · ${release.name}'),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w500),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              <String>[
+                                if (release.publishedAt != null)
+                                  _t('releasePublishedAt', {
+                                    'date': release.publishedAt!
+                                        .toIso8601String()
+                                        .split('T')
+                                        .first,
+                                  }),
+                                if (marks.isNotEmpty) marks.join(' / '),
+                                _t('releaseAssetsCount', {'count': release.assets.length}),
+                              ].join(' · '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              subtitle: Text(
-                <String>[
-                  if (release.publishedAt != null)
-                    _t('releasePublishedAt', {
-                      'date': release.publishedAt!
-                          .toIso8601String()
-                          .split('T')
-                          .first,
-                    }),
-                  if (marks.isNotEmpty) marks.join(' / '),
-                  _t('releaseAssetsCount', {'count': release.assets.length}),
-                ].join(' · '),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => unawaited(_openDetail(release)),
             );
           },
           emptyIcon: Icons.new_releases_outlined,
