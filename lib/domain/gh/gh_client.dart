@@ -75,14 +75,15 @@ class GhRateLimit {
 
   /// 序列化。
   Map<String, Object?> toJson() => <String, Object?>{
-        'limit': limit,
-        'remaining': remaining,
-        'resetAt': resetAt.toIso8601String(),
-        'resource': resource,
-      };
+    'limit': limit,
+    'remaining': remaining,
+    'resetAt': resetAt.toIso8601String(),
+    'resource': resource,
+  };
 
   @override
-  String toString() => 'GhRateLimit($remaining/$limit, reset in ${untilReset.inMinutes}min)';
+  String toString() =>
+      'GhRateLimit($remaining/$limit, reset in ${untilReset.inMinutes}min)';
 }
 
 /// 未认证 / 令牌失效。
@@ -234,6 +235,7 @@ class GhRequest {
     this.headers = const <String, String>{},
     this.conflictsAsRemoteConflict = false,
     this.cacheBypass = false,
+    this.expectedAccountId,
   });
 
   /// 路径（`/repos/...`）或完整 URL。
@@ -264,6 +266,9 @@ class GhRequest {
   /// 本次请求是否**绕过只读缓存**（下拉刷新 / 写后重读时置真）。
   final bool cacheBypass;
 
+  /// 排队期间切换账号时，拒绝将旧账号的通知操作发送给新账号。
+  final String? expectedAccountId;
+
   /// 拼出完整 URL。
   String toUrl(String base) {
     final buffer = StringBuffer(path.startsWith('http') ? path : '$base$path');
@@ -271,8 +276,10 @@ class GhRequest {
       return buffer.toString();
     }
     final parts = query.entries
-        .map((MapEntry<String, String> e) =>
-            '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+        .map(
+          (MapEntry<String, String> e) =>
+              '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}',
+        )
         .toList();
     return '$buffer${buffer.toString().contains('?') ? '&' : '?'}${parts.join('&')}';
   }
@@ -395,10 +402,10 @@ class GhClient {
     this.baseUrl = 'https://api.github.com',
     int maxConcurrent = 4,
     KernelDiagnostics? diagnostics,
-  })  : _net = net,
-        _auth = auth,
-        _semaphore = _Semaphore(maxConcurrent),
-        _diagnostics = diagnostics;
+  }) : _net = net,
+       _auth = auth,
+       _semaphore = _Semaphore(maxConcurrent),
+       _diagnostics = diagnostics;
 
   /// 默认 API 根。
   final String baseUrl;
@@ -485,7 +492,9 @@ class GhClient {
   /// 某资源类别是否已知耗尽（诊断用）。
   bool isResourceExhausted(String resource) {
     final known = _rateLimits[resource];
-    return known != null && known.isExhausted && known.untilReset > Duration.zero;
+    return known != null &&
+        known.isExhausted &&
+        known.untilReset > Duration.zero;
   }
 
   /// 由请求路径推导限流资源类别（与 GitHub 的分类一致）。
@@ -512,12 +521,17 @@ class GhClient {
     // ── 只读缓存（R4）：命中即返回，不打网络、不占额度 ──────────────────
     // 仅对白名单内的 GET 生效；被显式 bypass（下拉刷新 / 写后重读）时跳过。
     final Duration? cacheTtl =
-        (request.method == NetMethod.get && !request.cacheBypass)
-            ? ttlForPath(request.path)
-            : null;
+        (request.method == NetMethod.get &&
+            !request.cacheBypass &&
+            request.expectedAccountId == null)
+        ? ttlForPath(request.path)
+        : null;
     if (cacheTtl != null) {
-      final ({String body, String link})? cached =
-          await _readCache?.get(request.path, request.query, cacheTtl);
+      final ({String body, String link})? cached = await _readCache?.get(
+        request.path,
+        request.query,
+        cacheTtl,
+      );
       if (cached != null) {
         _diagnostics?.debug(
           'CACHE',
@@ -539,7 +553,9 @@ class GhClient {
     // search 的额度耗尽**不会**阻塞 core 请求（各自独立计数）。
     final resource = resourceOfPath(request.path);
     final known = _rateLimits[resource];
-    if (known != null && known.isExhausted && known.untilReset > Duration.zero) {
+    if (known != null &&
+        known.isExhausted &&
+        known.untilReset > Duration.zero) {
       throw GhRateLimitException(
         message: '$resource 额度已耗尽，将在 ${known.untilReset.inMinutes} 分钟后恢复',
         resetAt: known.resetAt,
@@ -548,7 +564,17 @@ class GhClient {
 
     await _semaphore.acquire();
     try {
-      final token = await _auth.activeToken();
+      final expected = request.expectedAccountId;
+      if (expected != null && await _auth.activeAccountId() != expected) {
+        throw const GhAuthException('accountChanged');
+      }
+      final token = expected == null
+          ? await _auth.activeToken()
+          : await _auth.tokenFor(expected);
+      if (expected != null &&
+          (token == null || await _auth.activeAccountId() != expected)) {
+        throw const GhAuthException('accountChanged');
+      }
       final headers = <String, String>{
         'accept': 'application/vnd.github+json',
         'x-github-api-version': '2022-11-28',
@@ -562,14 +588,16 @@ class GhClient {
         '→ ${request.method.verb} ${request.path}'
             '${request.query.isEmpty ? '' : '?${request.query.entries.map((e) => '${e.key}=${e.value}').join('&')}'}',
       );
-      final netResponse = await _net.send(NetRequest(
-        method: request.method,
-        url: request.toUrl(baseUrl),
-        headers: headers,
-        body: request.body == null ? null : jsonEncode(request.body),
-        timeout: const Duration(seconds: 30),
-        label: request.label ?? '${request.method.verb} ${request.path}',
-      ));
+      final netResponse = await _net.send(
+        NetRequest(
+          method: request.method,
+          url: request.toUrl(baseUrl),
+          headers: headers,
+          body: request.body == null ? null : jsonEncode(request.body),
+          timeout: const Duration(seconds: 30),
+          label: request.label ?? '${request.method.verb} ${request.path}',
+        ),
+      );
 
       final rateLimit = GhRateLimit.fromHeaders(netResponse.headers);
       if (rateLimit != null) {
@@ -639,7 +667,9 @@ class GhClient {
     Map<String, String> query = const <String, String>{},
     String? label,
   }) async {
-    final response = await send(GhRequest(path: path, query: query, label: label));
+    final response = await send(
+      GhRequest(path: path, query: query, label: label),
+    );
     return response.jsonObject;
   }
 
@@ -649,7 +679,9 @@ class GhClient {
     Map<String, String> query = const <String, String>{},
     String? label,
   }) async {
-    final response = await send(GhRequest(path: path, query: query, label: label));
+    final response = await send(
+      GhRequest(path: path, query: query, label: label),
+    );
     return response.jsonAsList;
   }
 
@@ -665,15 +697,17 @@ class GhClient {
   }) async* {
     var page = 1;
     while (page <= maxPages) {
-      final response = await send(GhRequest(
-        path: path,
-        query: <String, String>{
-          ...query,
-          'per_page': '$perPage',
-          'page': '$page',
-        },
-        label: 'GET $path (page $page)',
-      ));
+      final response = await send(
+        GhRequest(
+          path: path,
+          query: <String, String>{
+            ...query,
+            'per_page': '$perPage',
+            'page': '$page',
+          },
+          label: 'GET $path (page $page)',
+        ),
+      );
       final items = response.jsonAsList;
       if (items.isEmpty) {
         return;
@@ -702,10 +736,7 @@ class GhClient {
       case 401:
         // ★ 认证失效的**全局唯一出口**：标记状态，外壳据此自动回登录门。
         _auth.markExpired('令牌无效或已过期，请重新授权');
-        throw const GhAuthException(
-          '令牌无效或已过期，请重新授权',
-          statusCode: 401,
-        );
+        throw const GhAuthException('令牌无效或已过期，请重新授权', statusCode: 401);
       case 403:
       case 429:
         final retryAfter = _retryAfterOf(response);
@@ -726,10 +757,7 @@ class GhClient {
             secondary: true,
           );
         }
-        throw GhAuthException(
-          '权限不足（缺少 repo 等作用域）',
-          statusCode: 403,
-        );
+        throw GhAuthException('权限不足（缺少 repo 等作用域）', statusCode: 403);
       case 404:
         throw GhNotFoundException(request.path);
       case 409:
