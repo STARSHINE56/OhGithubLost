@@ -175,13 +175,56 @@ class _DraftsPageState extends State<DraftsPage> {
               final GhDraft draft = drafts[index];
               return OgLReveal(
                 delay: OgLAnim.staggerOf(context, index),
-                child: ListTile(
-                  leading: const Icon(Icons.edit_note),
-                  title: Text(
-                    draft.path,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                child: Card(
+                  elevation: 1,
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: InkWell(
+                    onTap: () => _view(draft),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.edit_note,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  draft.path,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontWeight: FontWeight.w500),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${draft.repo}${draft.branch.isEmpty ? '' : '@${draft.branch}'} · '
+                                  'rev ${draft.revision} · ${_fmt(draft.updatedAt)}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: _t('delete'),
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () => unawaited(_confirmDelete(draft)),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
+                ),
                   subtitle: Text(
                     '${draft.repo}${draft.branch.isEmpty ? '' : '@${draft.branch}'} · '
                     'rev ${draft.revision} · ${_fmt(draft.updatedAt)}',
