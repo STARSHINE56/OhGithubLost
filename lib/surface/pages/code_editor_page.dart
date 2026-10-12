@@ -111,7 +111,12 @@ class _CodeEditorPageState extends State<CodeEditorPage> {
     _draftTimer?.cancel();
     _draftTimer = Timer(const Duration(milliseconds: 900), _persistDraft);
     if (mounted) {
-      setState(() {});
+      // 延迟到 build 完成后再调用 setState，避免在 build 过程中触发报错
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {});
+        }
+      });
     }
   }
 
