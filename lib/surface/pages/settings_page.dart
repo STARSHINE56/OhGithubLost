@@ -416,6 +416,7 @@ class _SettingsPageState extends State<SettingsPage> {
               // 根级顺序**严格固定**（不再随缘排列）：
               // 外观 → 语言 → 代码与文件 → 网络 → 存储位置
               // → 账号 → 维护 → 关于 → 许可 → 日志。
+              // AI 功能
               if (widget.surface.hasAi) Card(child: ListTile(
                 leading: const Icon(Icons.auto_awesome_outlined),
                 title: Text(aiText('settings')),
@@ -423,10 +424,33 @@ class _SettingsPageState extends State<SettingsPage> {
                 onTap: () => Navigator.push(context, MaterialPageRoute<void>(
                   builder: (_) => AiSettingsPage(surface: widget.surface))),
               )),
+
+              // ── 外观与体验 ──
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text(
+                  '外观与体验',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
               _appearanceSection(theme, value),
               _languageSection(theme),
               _codeSection(context, theme, value),
-              // 网络：**独立子页面**（不折叠）。
+
+              // ── 网络与存储 ──
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text(
+                  '网络与存储',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
               Card(
                 clipBehavior: Clip.antiAlias,
                 margin: const EdgeInsets.only(bottom: 12),
@@ -440,10 +464,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   onTap: _openNetwork,
                 ),
               ),
-              // 存储位置：档位 + 选择文件夹（SAF）/ 所有文件访问。
               _storageSection(theme),
-              // 保存失败提示：常驻 `AnimatedSize` 承载条件内容（带过渡；
-              // 档位 0 时 `OgLAnim` 给零时长 = 立即展开）。
               AnimatedSize(
                 duration: OgLAnim.medium(context),
                 curve: OgLAnim.curve(context),
@@ -464,9 +485,31 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                       ),
               ),
+
+              // ── 账户 ──
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text(
+                  '账户',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
               _accountSection(theme),
-              // 捐赠一颗心：README 一直承诺此项，而实现早已写好却**从未接线**
-              // （靠 `// ignore: unused_element` 压着 analyze）。这里补上入口。
+
+              // ── 关于与维护 ──
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: Text(
+                  '关于与维护',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
               Card(
                 clipBehavior: Clip.antiAlias,
                 margin: const EdgeInsets.only(bottom: 12),
@@ -483,7 +526,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               _maintenanceSection(theme),
-              // 关于：独立于折叠菜单的全屏子页面。
               Card(
                 clipBehavior: Clip.antiAlias,
                 margin: const EdgeInsets.only(bottom: 12),
