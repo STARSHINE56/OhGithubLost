@@ -44,11 +44,11 @@ enum OgLShellTab {
   /// 搜索（仓库 / 代码）。
   search,
 
-  /// 我的（账户 / Gist / 危险区）。
-  profile,
+  /// AI 助手。
+  ai,
 
-  /// 设置（外观 / 网络 / 账户 / 关于）。
-  settings,
+  /// 我的（账户 / Gist / 设置 / 危险区）。
+  profile,
 }
 
 /// 客户端主壳（含登录门）。
@@ -239,8 +239,8 @@ class _OgLClientShellState extends State<OgLClientShell>
                           leading: Icon(switch (tab) {
                             OgLShellTab.home => Icons.folder_outlined,
                             OgLShellTab.search => Icons.search,
+                            OgLShellTab.ai => Icons.auto_awesome_outlined,
                             OgLShellTab.profile => Icons.person_outline,
-                            OgLShellTab.settings => Icons.settings_outlined,
                           }),
                           title: Text(OgLI18n.instance.t('shell', tab.name)),
                           shape: RoundedRectangleBorder(
@@ -463,10 +463,10 @@ class _OgLClientShellState extends State<OgLClientShell>
           key: ValueKey<String>('search-${_accountId ?? 'guest'}'),
           surface: widget.surface,
         );
+      case OgLShellTab.ai:
+        return AiChatPage(surface: widget.surface);
       case OgLShellTab.profile:
         return ProfilePage(surface: widget.surface, onAccountsChanged: _check);
-      case OgLShellTab.settings:
-        return SettingsPage(surface: widget.surface, report: widget.report);
     }
   }
 
@@ -490,7 +490,7 @@ class _OgLClientShellState extends State<OgLClientShell>
               LogicalKeyboardKey.comma,
               control: true,
             ): () =>
-                _select(OgLShellTab.settings),
+                _select(OgLShellTab.profile),
             if (widget.surface.hasAi)
               const SingleActivator(
                 LogicalKeyboardKey.keyA,
@@ -578,15 +578,16 @@ class _OgLClientShellState extends State<OgLClientShell>
               icon: const Icon(Icons.search),
               label: OgLI18n.instance.t('shell', 'search'),
             ),
+            if (widget.surface.hasAi)
+              NavigationDestination(
+                icon: const Icon(Icons.auto_awesome_outlined),
+                selectedIcon: const Icon(Icons.auto_awesome),
+                label: 'AI',
+              ),
             NavigationDestination(
               icon: const Icon(Icons.person_outline),
               selectedIcon: const Icon(Icons.person),
               label: OgLI18n.instance.t('shell', 'profile'),
-            ),
-            NavigationDestination(
-              icon: const Icon(Icons.settings_outlined),
-              selectedIcon: const Icon(Icons.settings),
-              label: OgLI18n.instance.t('shell', 'settings'),
             ),
           ],
         ),
@@ -634,14 +635,14 @@ class _OgLClientShellState extends State<OgLClientShell>
                 label: Text(OgLI18n.instance.t('shell', 'search')),
               ),
               NavigationRailDestination(
+                icon: const Icon(Icons.auto_awesome_outlined),
+                selectedIcon: const Icon(Icons.auto_awesome),
+                label: const Text('AI'),
+              ),
+              NavigationRailDestination(
                 icon: const Icon(Icons.person_outline),
                 selectedIcon: const Icon(Icons.person),
                 label: Text(OgLI18n.instance.t('shell', 'profile')),
-              ),
-              NavigationRailDestination(
-                icon: const Icon(Icons.settings_outlined),
-                selectedIcon: const Icon(Icons.settings),
-                label: Text(OgLI18n.instance.t('shell', 'settings')),
               ),
             ],
           ),
