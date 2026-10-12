@@ -175,24 +175,66 @@ class _GithubNotificationsPageState extends State<GithubNotificationsPage> {
                       final item = _items[index];
                       final subject = item['subject'] as Map;
                       final unread = item['unread'] == true;
-                      return ListTile(
-                        leading: Icon(
-                          unread
-                              ? Icons.mark_email_unread_outlined
-                              : Icons.drafts_outlined,
+                      return Card(
+                        elevation: 1,
+                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        child: InkWell(
+                          onTap: () => _open(item),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  unread
+                                      ? Icons.mark_email_unread_outlined
+                                      : Icons.drafts_outlined,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${subject['title']}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontWeight: FontWeight.w500),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '${(item['repository'] as Map)['full_name']}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                      Text(
+                                        '${item['reason']} · ${item['updated_at']}',
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (unread)
+                                  IconButton(
+                                    tooltip: aiText('markRead'),
+                                    icon: const Icon(Icons.done),
+                                    onPressed: () => _read(item),
+                                  ),
+                              ],
+                            ),
+                          ),
                         ),
-                        title: Text('${subject['title']}'),
-                        subtitle: Text(
-                          '${(item['repository'] as Map)['full_name']}\n${item['reason']} · ${item['updated_at']}',
-                        ),
-                        onTap: () => _open(item),
-                        trailing: unread
-                            ? IconButton(
-                                tooltip: aiText('markRead'),
-                                icon: const Icon(Icons.done),
-                                onPressed: () => _read(item),
-                              )
-                            : null,
                       );
                     },
                   ),
