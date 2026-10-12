@@ -75,7 +75,7 @@ class ProductivityService {
   /// 通过 GitHub 批量接口处理所有页；以点击时刻为截止，保留之后的新消息。
   Future<void> markAllNotificationsRead() async {
     final cutoff =
-        DateTime.now().toUtc().toIso8601String().split('.').first + 'Z';
+        '${DateTime.now().toUtc().toIso8601String().split('.').first}Z';
     await _notificationRequest('PUT', '/notifications', <String, Object?>{
       'last_read_at': cutoff,
       'read': true,
