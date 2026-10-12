@@ -207,7 +207,7 @@ class _OgLClientShellState extends State<OgLClientShell>
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'GitHub 客户端',
+                              OgLI18n.instance.t('shell', 'appSlogan'),
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
                                   ),
@@ -226,7 +226,7 @@ class _OgLClientShellState extends State<OgLClientShell>
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                         child: Text(
-                          '主导航',
+                          OgLI18n.instance.t('shell', 'mainNav'),
                           style: Theme.of(context).textTheme.labelSmall?.copyWith(
                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 fontWeight: FontWeight.w600,
@@ -259,7 +259,7 @@ class _OgLClientShellState extends State<OgLClientShell>
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                         child: Text(
-                          '工具',
+                          OgLI18n.instance.t('shell', 'tools'),
                           style: Theme.of(context).textTheme.labelSmall?.copyWith(
                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 fontWeight: FontWeight.w600,
