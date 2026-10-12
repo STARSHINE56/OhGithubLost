@@ -113,5 +113,7 @@
   "unknownTool": "Action IA non prise en charge",
   "unsupportedFile": "Liens symboliques, sous-modules et binaires non pris en charge",
   "watchFailed": "Vérification échouée ; nouvel essai prévu",
-  "cancelled": "Action annulée ; proposition non exécutée"
+  "cancelled": "Action annulée ; proposition non exécutée",
+  "markAllRead": "Tout marquer comme lu",
+  "markAllReadSubmitted": "Demande envoyée. GitHub peut la traiter en arrière-plan."
 }

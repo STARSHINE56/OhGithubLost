@@ -113,5 +113,7 @@
   "unknownTool": "不支持此 AI 操作",
   "unsupportedFile": "不支持修改符号链接、子模块或二进制文件",
   "watchFailed": "仓库更新检查失败，下次将重试",
-  "cancelled": "操作已取消，未执行本次提案"
+  "cancelled": "操作已取消，未执行本次提案",
+  "markAllRead": "全部已读",
+  "markAllReadSubmitted": "已提交全部已读。列表会刷新，GitHub 后台处理可能稍有延迟。"
 }

@@ -51,9 +51,7 @@ void main() async {
   await OgLLogFile.init(
     candidates: await ogLLogDirectoryCandidates(),
     appVersion: kOgLAppVersion,
-    buildMode: kReleaseMode
-        ? 'release'
-        : (kProfileMode ? 'profile' : 'debug'),
+    buildMode: kReleaseMode ? 'release' : (kProfileMode ? 'profile' : 'debug'),
     platform: _ogLPlatformName(),
   );
   // 平台与版本：`dart:io` 的 `Platform.operatingSystemVersion` 在 Web 上不存在，
@@ -81,6 +79,7 @@ void main() async {
     OgLLogFile.line('崩溃', details.toString(), level: 'ERR');
     OgLNoticeCenter.instance.report(
       title: '界面异常',
+      delivery: OgLNoticeDelivery.inAppOnly,
       detail: details.exceptionAsString(),
       severity: OgLNoticeSeverity.critical,
     );
@@ -89,14 +88,15 @@ void main() async {
   //    避免被框架静默吞掉。
   WidgetsBinding.instance.platformDispatcher.onError =
       (Object error, StackTrace stack) {
-    OgLLogFile.line('崩溃', '未捕获异常：$error\n$stack', level: 'ERR');
-    OgLNoticeCenter.instance.report(
-      title: '未捕获异常',
-      detail: error.toString(),
-      severity: OgLNoticeSeverity.critical,
-    );
-    return true;
-  };
+        OgLLogFile.line('崩溃', '未捕获异常：$error\n$stack', level: 'ERR');
+        OgLNoticeCenter.instance.report(
+          title: '未捕获异常',
+          delivery: OgLNoticeDelivery.inAppOnly,
+          detail: error.toString(),
+          severity: OgLNoticeSeverity.critical,
+        );
+        return true;
+      };
 
   final diagnostics = KernelDiagnostics(appVersion: kOgLAppVersion);
   final warnings = TrustWarningCollector();
@@ -115,7 +115,8 @@ void main() async {
     if (features.disableAnimations) {
       OgLNoticeCenter.instance.report(
         title: '系统已关闭动画',
-        detail: '检测到系统已关闭动画（常见于「开发者选项 → 动画程序时长缩放」'
+        detail:
+            '检测到系统已关闭动画（常见于「开发者选项 → 动画程序时长缩放」'
             '或「无障碍 → 移除动画」）。应用内的页面切换与控件反馈动画将不可见，'
             '但功能不受影响。如需动画，请在系统设置中重新开启。',
         severity: OgLNoticeSeverity.warning,
@@ -236,19 +237,13 @@ void main() async {
     runApp(OgLBootFailureApp(message: error.toString()));
   } catch (error, stackTrace) {
     // 兜底：任何**未预期**的装配 / 启动异常也必须可见——绝不允许白屏。
-    OgLLogFile.line(
-      '崩溃',
-      '启动流程未捕获异常：$error\n$stackTrace',
-      level: 'ERR',
-    );
+    OgLLogFile.line('崩溃', '启动流程未捕获异常：$error\n$stackTrace', level: 'ERR');
     OgLAppLog.instance.add(
       '启动',
       '启动流程异常：$error',
       severity: OgLNoticeSeverity.critical,
     );
-    runApp(OgLBootFailureApp(
-      message: '启动流程出现未预期异常：$error\n\n$stackTrace',
-    ));
+    runApp(OgLBootFailureApp(message: '启动流程出现未预期异常：$error\n\n$stackTrace'));
   }
 }
 
@@ -259,4 +254,3 @@ void main() async {
 String _ogLPlatformName() {
   return defaultTargetPlatform.name.toLowerCase();
 }
-

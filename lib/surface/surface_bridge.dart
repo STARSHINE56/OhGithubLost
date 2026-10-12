@@ -98,8 +98,12 @@ class SurfaceBridge {
   }) => domain.productivity!.notifications(page: page, all: all);
   Future<void> markGithubNotificationRead(String id) =>
       domain.productivity!.markRead(id);
-  Future<Map<String, dynamic>> githubNotificationSubject(String repo, String url) =>
-      domain.productivity!.notificationSubject(repo, url);
+  Future<void> markAllGithubNotificationsRead() =>
+      domain.productivity!.markAllNotificationsRead();
+  Future<Map<String, dynamic>> githubNotificationSubject(
+    String repo,
+    String url,
+  ) => domain.productivity!.notificationSubject(repo, url);
   Future<Map<String, dynamic>> starMetadata() =>
       domain.productivity!.starMetadata();
   Future<void> organizeStar(String repo, String category, List<String> tags) =>

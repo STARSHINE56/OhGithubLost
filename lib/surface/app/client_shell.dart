@@ -170,98 +170,27 @@ class _OgLClientShellState extends State<OgLClientShell>
     MaterialPageRoute<void>(builder: (_) => page),
   );
 
-  /// 保留四个主导航，把扩展能力与 AI 放在抽屉下方。
+  /// 主导航统一由底栏 / 导航轨承载，抽屉只放扩展工具。
   Widget? _drawer() => !widget.surface.hasAi
       ? null
       : Drawer(
           child: SafeArea(
             child: Column(
               children: [
-                // 用户信息头部
-                Container(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(16),
-                      bottomRight: Radius.circular(16),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        child: const Icon(Icons.person, size: 28),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'OGL',
-                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              OgLI18n.instance.t('shell', 'appSlogan'),
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
                 Expanded(
                   child: ListView(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     children: [
-                      // 主导航分组
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                        child: Text(
-                          OgLI18n.instance.t('shell', 'mainNav'),
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
-                              ),
-                        ),
-                      ),
-                      for (final tab in OgLShellTab.values)
-                        ListTile(
-                          selected: tab == _tab,
-                          leading: Icon(switch (tab) {
-                            OgLShellTab.home => Icons.folder_outlined,
-                            OgLShellTab.search => Icons.search,
-                            OgLShellTab.ai => Icons.auto_awesome_outlined,
-                            OgLShellTab.profile => Icons.person_outline,
-                          }),
-                          title: Text(OgLI18n.instance.t('shell', tab.name)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          onTap: () {
-                            _scaffoldKey.currentState?.closeDrawer();
-                            _select(tab);
-                          },
-                        ),
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Divider(),
-                      ),
                       // 工具分组
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                         child: Text(
                           OgLI18n.instance.t('shell', 'tools'),
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          style: Theme.of(context).textTheme.labelSmall
+                              ?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant,
                                 fontWeight: FontWeight.w600,
                               ),
                         ),
@@ -594,14 +523,6 @@ class _OgLClientShellState extends State<OgLClientShell>
                     tooltip: aiText('menu'),
                     onPressed: () => _scaffoldKey.currentState?.openDrawer(),
                     icon: const Icon(Icons.menu),
-                  )
-                : null,
-            trailing: widget.surface.hasAi
-                ? IconButton(
-                    tooltip: aiText('title'),
-                    onPressed: () =>
-                        _openFeature(AiChatPage(surface: widget.surface)),
-                    icon: const Icon(Icons.auto_awesome_outlined),
                   )
                 : null,
             selectedIndex: index,

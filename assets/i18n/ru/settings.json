@@ -161,5 +161,7 @@
   "appearanceGroup": "Appearance",
   "networkStorageGroup": "Network & Storage",
   "accountGroup": "Account",
-  "aboutGroup": "About"
+  "aboutGroup": "О приложении и поддержка",
+  "assistantGroup": "ИИ-помощник",
+  "maintenanceGroup": "Приложение и обслуживание"
 }

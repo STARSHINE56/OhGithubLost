@@ -113,5 +113,7 @@
   "unknownTool": "KI-Aktion nicht unterstützt",
   "unsupportedFile": "Symlinks, Submodule und Binärdateien nicht unterstützt",
   "watchFailed": "Update-Prüfung fehlgeschlagen; erneuter Versuch folgt",
-  "cancelled": "Aktion abgebrochen; Vorschlag nicht ausgeführt"
+  "cancelled": "Aktion abgebrochen; Vorschlag nicht ausgeführt",
+  "markAllRead": "Alle als gelesen markieren",
+  "markAllReadSubmitted": "Anfrage gesendet. GitHub verarbeitet sie eventuell im Hintergrund."
 }

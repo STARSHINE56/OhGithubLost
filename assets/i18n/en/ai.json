@@ -113,5 +113,7 @@
   "unknownTool": "Unsupported AI operation",
   "unsupportedFile": "Symlinks, submodules and binary files are unsupported",
   "watchFailed": "Repository checks failed; will retry",
-  "cancelled": "Operation cancelled; proposal not executed"
+  "cancelled": "Operation cancelled; proposal not executed",
+  "markAllRead": "Mark all as read",
+  "markAllReadSubmitted": "Request submitted. Refreshing; GitHub may process it in the background."
 }

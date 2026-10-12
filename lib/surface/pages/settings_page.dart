@@ -1,22 +1,5 @@
-/// L3 展示级 · 设置（**根级不折叠，常展开**）。
-///
-/// ## 为什么折叠
-/// 设置项持续增多（外观 / 语言 / 代码与文件 / 网络 / 账户 / 维护 /
-/// 许可 / 日志），平铺会让用户在一屏里被几十个控件淹没、找不到目标。
-/// 折叠分组让"每一屏只展开一件关心的事"，同时保留全部能力；默认收起，
-/// 进入设置页看到的是**分组标题清单**，而不是一长串控件。
-///
-/// ## 子条目
-/// 分组内允许二级结构：先放"开关 / 选择"，再放"依赖它的子项"
-/// （例如自定义 DNS 打开后才出现 DNS 服务器与 DoH）。
-///
-/// ## 关于与捐赠
-/// - "关于"是设置页内的**全屏子页面**（不塞进折叠菜单）；
-/// - "捐赠一颗心"用**当前登录令牌**给项目仓库加星，含二次确认与已 star 处理。
-///
-/// ## 只留"真选项"
-/// 每个条目都必须**接到真实行为**上（外观→主题/缩放/动效；代码→高亮/字号/
-/// 换行/排序；网络→DNS 即时生效；账户→退出；维护→重置/权限引导）。
+/// L3 展示级 · 设置分类首页；具体选项在子页面中调整。
+/// 账户统一在「我的」管理，运行日志统一在通知中心查看。
 library;
 
 import 'dart:async';
@@ -25,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../kernel/kernel.dart';
-import '../../kernel/log/og_l_log_file.dart';
 import '../app/animations.dart';
 import '../app/error_surface.dart';
 import '../app/notifier.dart';
@@ -40,8 +22,10 @@ import '../util/accel.dart';
 import '../widgets/code_editor_field.dart';
 import 'about_page.dart';
 import 'ai_settings_page.dart';
+import 'github_notifications_page.dart';
 import 'legal_text_page.dart';
 import 'network_page.dart';
+import 'notifications_page.dart';
 import 'onboarding_page.dart';
 
 /// 设置页。
@@ -64,39 +48,6 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   OgLSettingsController get _settings => widget.surface.settings;
-
-  /// 日志栏目最多展示的行数（复制仍带走全部）。
-  static const int _logTailShown = 80;
-
-  /// 账户行的 Future（**State 持有**，只创建一次）。
-  ///
-  /// 原实现把 `auth.activeAccount()` 写在 `build` 里：每次重建都会重新发请求，
-  /// 账户行因此反复闪「读取中」。账号增删后（见 [_refreshAccount]）重建它即可。
-  Future<GhAccount?>? _accountFuture;
-
-  @override
-  void initState() {
-    super.initState();
-    _accountFuture = widget.surface.domain.auth.activeAccount();
-    // 账号增删（登录页 / 用户页）会通知：重建 Future，账户行跟上变化。
-    widget.surface.domain.auth.addListener(_refreshAccount);
-  }
-
-  @override
-  void dispose() {
-    widget.surface.domain.auth.removeListener(_refreshAccount);
-    super.dispose();
-  }
-
-  /// 重建账户行 Future（账号状态变化后调用）。
-  void _refreshAccount() {
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _accountFuture = widget.surface.domain.auth.activeAccount();
-    });
-  }
 
   /// 自定义代码配色的可选色板（ARGB）。
   static const List<int> _kCodePalette = <int>[
@@ -129,11 +80,11 @@ class _SettingsPageState extends State<SettingsPage> {
   /// 5.2：档位语义改为**质量**（静默 / 保守 / 标准 / 拉满），
   /// 不再复用界面密度的「最小 / 当前 / 标准 / 增强」字样。
   List<String> get _motionShort => <String>[
-        _t('motionMin'),
-        _t('motionConservative'),
-        _t('motionStandard'),
-        _t('motionFull'),
-      ];
+    _t('motionMin'),
+    _t('motionConservative'),
+    _t('motionStandard'),
+    _t('motionFull'),
+  ];
 
   /// 动效档位的说明（与 [OgLSettings.motionLevelIds] 一一对应）。
   List<String> get _motionHints => <String>[
@@ -168,7 +119,8 @@ class _SettingsPageState extends State<SettingsPage> {
                       selected: argb == current,
                       inMutuallyExclusiveGroup: true,
                       label: _t('colorSwatch', <String, Object?>{
-                        'color': '#${(argb & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}',
+                        'color':
+                            '#${(argb & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}',
                       }),
                       child: InkWell(
                         borderRadius: BorderRadius.circular(24),
@@ -188,8 +140,8 @@ class _SettingsPageState extends State<SettingsPage> {
                                 border: Border.all(
                                   color: argb == current
                                       ? Theme.of(dialogContext)
-                                          .colorScheme
-                                          .primary
+                                            .colorScheme
+                                            .primary
                                       : const Color(0x33000000),
                                   width: argb == current ? 3 : 1,
                                 ),
@@ -221,7 +173,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final String current = _settings.settings.dnsServerId;
     final String? picked = await _showOgLDialog<String>(
       builder: (BuildContext dialogContext) => SimpleDialog(
-        title:  Text(_t('selectDns')),
+        title: Text(_t('selectDns')),
         children: <Widget>[
           for (final MapEntry<String, String> entry in choices.entries)
             SimpleDialogOption(
@@ -229,8 +181,7 @@ class _SettingsPageState extends State<SettingsPage> {
               child: Row(
                 children: <Widget>[
                   Expanded(child: Text(entry.value)),
-                  if (entry.key == current)
-                    const Icon(Icons.check, size: 18),
+                  if (entry.key == current) const Icon(Icons.check, size: 18),
                 ],
               ),
             ),
@@ -249,16 +200,16 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _reset() async {
     final bool? confirmed = await _showOgLDialog<bool>(
       builder: (BuildContext dialogContext) => AlertDialog(
-        title:  Text(_t('resetSettings')),
-        content:  Text(_t('resetDesc')),
+        title: Text(_t('resetSettings')),
+        content: Text(_t('resetDesc')),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child:  Text(_t('cancel')),
+            child: Text(_t('cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child:  Text(_t('reset')),
+            child: Text(_t('reset')),
           ),
         ],
       ),
@@ -274,14 +225,18 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   /// 设置页文案取用（统一 `settings` 分片）。
-  String _t(String key, [Map<String, Object?>? args]) =>
-      OgLI18n.instance.t('settings', key,
-          args: args?.map((String k, Object? v) => MapEntry<String, String>(k, '$v')));
+  String _t(String key, [Map<String, Object?>? args]) => OgLI18n.instance.t(
+    'settings',
+    key,
+    args: args?.map((String k, Object? v) => MapEntry<String, String>(k, '$v')),
+  );
 
   /// `common` 分片文案（加速协议 / 通用按钮等）。
-  String _tc(String key, [Map<String, Object?>? args]) =>
-      OgLI18n.instance.t('common', key,
-          args: args?.map((String k, Object? v) => MapEntry<String, String>(k, '$v')));
+  String _tc(String key, [Map<String, Object?>? args]) => OgLI18n.instance.t(
+    'common',
+    key,
+    args: args?.map((String k, Object? v) => MapEntry<String, String>(k, '$v')),
+  );
 
   Future<void> _pickLanguage() async {
     final String current = _settings.settings.languageCode;
@@ -295,8 +250,7 @@ class _SettingsPageState extends State<SettingsPage> {
               child: Row(
                 children: <Widget>[
                   Expanded(child: Text(item.label)),
-                  if (item.code == current)
-                    const Icon(Icons.check, size: 18),
+                  if (item.code == current) const Icon(Icons.check, size: 18),
                 ],
               ),
             ),
@@ -347,20 +301,20 @@ class _SettingsPageState extends State<SettingsPage> {
     }
     final bool? confirmed = await _showOgLDialog<bool>(
       builder: (BuildContext dialogContext) => AlertDialog(
-        title:  Text(_t('donateHeart')),
+        title: Text(_t('donateHeart')),
         content: Text(
           _t('donateDesc1', {'login': account.login}) +
-          _t('donateDesc2', {'repo': OgLProjectInfo.repoFullName}) +
-          _t('donateDesc3'),
+              _t('donateDesc2', {'repo': OgLProjectInfo.repoFullName}) +
+              _t('donateDesc3'),
         ),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child:  Text(_t('thinkAgain')),
+            child: Text(_t('thinkAgain')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child:  Text(_t('donateHeart')),
+            child: Text(_t('donateHeart')),
           ),
         ],
       ),
@@ -369,16 +323,19 @@ class _SettingsPageState extends State<SettingsPage> {
       return;
     }
     try {
-      final bool already = await widget.surface.domain.api
-          .isRepoStarred(OgLProjectInfo.repoFullName);
+      final bool already = await widget.surface.domain.api.isRepoStarred(
+        OgLProjectInfo.repoFullName,
+      );
       if (already) {
         if (mounted) {
           _notifier.info(_t('alreadyStarred'));
         }
         return;
       }
-      await widget.surface.domain.api
-          .setStarred(OgLProjectInfo.repoFullName, true);
+      await widget.surface.domain.api.setStarred(
+        OgLProjectInfo.repoFullName,
+        true,
+      );
       if (mounted) {
         _notifier.success(_t('starredThanks'));
       }
@@ -389,162 +346,198 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
-  /// 复制全部日志到剪贴板。
-  Future<void> _copyLogs(List<String> lines) async {
-    await Clipboard.setData(ClipboardData(text: lines.join('\n')));
-    if (!mounted) {
-      return;
-    }
-    _notifier.success(_t('copiedLogLines', {'count': lines.length}));
-  }
-
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(_t('title'))),
-      // 根级子项逐个挂入场动画（[OgLRevealList] 自动错峰）；不再整页包一层
-      // `OgLReveal` —— 那会与路由过渡叠加成双重动画。
       body: ListenableBuilder(
         listenable: _settings,
-        builder: (BuildContext context, Widget? _) {
-          final OgLSettings value = _settings.settings;
-          final String? saveError = _settings.lastError;
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: OgLRevealList.of(context, <Widget>[
-              // 根级顺序**严格固定**（不再随缘排列）：
-              // 外观 → 语言 → 代码与文件 → 网络 → 存储位置
-              // → 账号 → 维护 → 关于 → 许可 → 日志。
-              // AI 功能
-              if (widget.surface.hasAi) Card(child: ListTile(
-                leading: const Icon(Icons.auto_awesome_outlined),
-                title: Text(aiText('settings')),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.push(context, MaterialPageRoute<void>(
-                  builder: (_) => AiSettingsPage(surface: widget.surface))),
-              )),
-
-              // ── 外观与体验 ──
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
-                  OgLI18n.instance.t('settings', 'appearanceGroup'),
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w600,
+        builder: (BuildContext context, Widget? _) => ListView(
+          padding: const EdgeInsets.all(16),
+          children: OgLRevealList.of(context, <Widget>[
+            _saveError(theme),
+            _section(
+              theme,
+              title: _t('appearanceGroup'),
+              children: <Widget>[
+                _entry(
+                  Icons.palette_outlined,
+                  _t('appearance'),
+                  subtitle: _t('appearanceDesc'),
+                  onTap: () => _openSection(
+                    'appearance',
+                    (context, theme, value) => <Widget>[
+                      _appearanceSection(theme, value),
+                    ],
                   ),
                 ),
-              ),
-              _appearanceSection(theme, value),
-              _languageSection(theme),
-              _codeSection(context, theme, value),
-
-              // ── 网络与存储 ──
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
-                  OgLI18n.instance.t('settings', 'networkStorageGroup'),
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w600,
+                _entry(
+                  Icons.translate,
+                  _t('language'),
+                  subtitle: OgLI18n.instance.localeLabel,
+                  onTap: _pickLanguage,
+                ),
+                _entry(
+                  Icons.code,
+                  _t('codeAndFiles'),
+                  subtitle: _t('codeDesc'),
+                  onTap: () => _openSection(
+                    'codeAndFiles',
+                    (context, theme, value) => <Widget>[
+                      _codeSection(context, theme, value),
+                    ],
                   ),
                 ),
-              ),
-              Card(
-                clipBehavior: Clip.antiAlias,
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  leading: const Icon(Icons.wifi_outlined),
-                  title: Text(_t('network')),
-                  subtitle:  Text(_t('dnsMode')),
-                  titleTextStyle: theme.textTheme.titleMedium,
-                  subtitleTextStyle: theme.textTheme.bodySmall,
-                  trailing: const Icon(Icons.chevron_right),
+              ],
+            ),
+            _section(
+              theme,
+              title: _t('networkStorageGroup'),
+              children: <Widget>[
+                _entry(
+                  Icons.wifi_outlined,
+                  _t('network'),
+                  subtitle: _t('dnsMode'),
                   onTap: _openNetwork,
                 ),
-              ),
-              _storageSection(theme),
-              AnimatedSize(
-                duration: OgLAnim.medium(context),
-                curve: OgLAnim.curve(context),
-                alignment: Alignment.topCenter,
-                child: saveError == null
-                    ? const SizedBox(width: double.infinity)
-                    : Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        color: theme.colorScheme.errorContainer,
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Text(
-                            saveError,
-                            style: TextStyle(
-                              color: theme.colorScheme.onErrorContainer,
-                            ),
-                          ),
-                        ),
+                _entry(
+                  Icons.folder_outlined,
+                  OgLI18n.instance.t('shell', 'storageAccess'),
+                  subtitle: OgLI18n.instance.t('shell', 'storageGrantDesc1'),
+                  onTap: _showStorage,
+                ),
+              ],
+            ),
+            if (widget.surface.hasAi)
+              _section(
+                theme,
+                title: _t('assistantGroup'),
+                children: <Widget>[
+                  _entry(
+                    Icons.auto_awesome_outlined,
+                    aiText('settings'),
+                    onTap: () => Navigator.push<void>(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => AiSettingsPage(surface: widget.surface),
                       ),
+                    ),
+                  ),
+                ],
               ),
-
-              // ── 账户 ──
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
-                  OgLI18n.instance.t('settings', 'accountGroup'),
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w600,
+            _section(
+              theme,
+              title: _t('maintenanceGroup'),
+              children: <Widget>[
+                _entry(
+                  Icons.notifications_outlined,
+                  aiText('notifications'),
+                  subtitle: aiText('appLogs'),
+                  onTap: () => Navigator.push<void>(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => widget.surface.hasAi
+                          ? GithubNotificationsPage(
+                              surface: widget.surface,
+                              initialTab: 1,
+                            )
+                          : const NotificationsPage(),
+                    ),
                   ),
                 ),
-              ),
-              _accountSection(theme),
-
-              // ── 关于与维护 ──
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                child: Text(
-                  OgLI18n.instance.t('settings', 'aboutGroup'),
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                    fontWeight: FontWeight.w600,
+                _entry(
+                  Icons.settings_backup_restore,
+                  _t('guideAndReset'),
+                  onTap: () => _openSection(
+                    'maintenance',
+                    (context, theme, value) => <Widget>[
+                      _maintenanceSection(theme),
+                    ],
                   ),
                 ),
-              ),
-              Card(
-                clipBehavior: Clip.antiAlias,
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  leading: const Icon(Icons.favorite_outline),
-                  title: Text(_t('donateHeart')),
-                  subtitle: Text(_t('donateTileDesc', <String, Object?>{
-                    'repo': OgLProjectInfo.repoFullName,
-                  })),
-                  titleTextStyle: theme.textTheme.titleMedium,
-                  subtitleTextStyle: theme.textTheme.bodySmall,
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => unawaited(_donateStar()),
-                ),
-              ),
-              _maintenanceSection(theme),
-              Card(
-                clipBehavior: Clip.antiAlias,
-                margin: const EdgeInsets.only(bottom: 12),
-                child: ListTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: Text(OgLI18n.instance.t('shell', 'about')),
-                  subtitle:  Text(_t('projectInfo')),
-                  titleTextStyle: theme.textTheme.titleMedium,
-                  subtitleTextStyle: theme.textTheme.bodySmall,
-                  trailing: const Icon(Icons.chevron_right),
+              ],
+            ),
+            _section(
+              theme,
+              title: _t('aboutGroup'),
+              children: <Widget>[
+                _entry(
+                  Icons.info_outline,
+                  OgLI18n.instance.t('shell', 'about'),
+                  subtitle: _t('projectInfo'),
                   onTap: _openAbout,
                 ),
-              ),
-              _licenseSection(theme),
-              _logsSection(theme),
-              const SizedBox(height: 24),
-            ]),
-          );
-        },
+                _entry(
+                  Icons.gavel_outlined,
+                  _t('licenses'),
+                  subtitle: _t('licensesDesc'),
+                  onTap: () => _openSection(
+                    'licenses',
+                    (context, theme, value) => <Widget>[_licenseSection(theme)],
+                  ),
+                ),
+                _entry(
+                  Icons.favorite_outline,
+                  _t('donateHeart'),
+                  onTap: () => unawaited(_donateStar()),
+                ),
+              ],
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _entry(
+    IconData icon,
+    String title, {
+    String? subtitle,
+    required VoidCallback onTap,
+  }) => ListTile(
+    leading: Icon(icon),
+    title: Text(title),
+    subtitle: subtitle == null ? null : Text(subtitle),
+    trailing: const Icon(Icons.chevron_right),
+    onTap: onTap,
+  );
+
+  Widget _saveError(ThemeData theme) => _settings.lastError == null
+      ? const SizedBox.shrink()
+      : Card(
+          color: theme.colorScheme.errorContainer,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              _settings.lastError!,
+              style: TextStyle(color: theme.colorScheme.onErrorContainer),
+            ),
+          ),
+        );
+
+  void _openSection(
+    String titleKey,
+    List<Widget> Function(BuildContext, ThemeData, OgLSettings) contents,
+  ) {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (BuildContext routeContext) => Scaffold(
+          appBar: AppBar(title: Text(_t(titleKey))),
+          body: ListenableBuilder(
+            listenable: _settings,
+            builder: (BuildContext context, Widget? _) {
+              final ThemeData theme = Theme.of(context);
+              return ListView(
+                padding: const EdgeInsets.all(16),
+                children: <Widget>[
+                  _saveError(theme),
+                  ...contents(context, theme, _settings.settings),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -553,118 +546,111 @@ class _SettingsPageState extends State<SettingsPage> {
 
   /// 外观（明暗 / 主题色 / 密度 / 字号 / 动效）。
   Widget _appearanceSection(ThemeData theme, OgLSettings value) => _section(
-        theme,
-        title: _t('appearance'),
-        subtitle: _t('appearanceDesc'),
-        children: <Widget>[
-          _subTitle(theme, _t('themeMode')),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: SegmentedButton<OgLThemeMode>(
-              segments:  <ButtonSegment<OgLThemeMode>>[
-                ButtonSegment<OgLThemeMode>(
-                  value: OgLThemeMode.system,
-                  label: Text(_t('followSystem')),
-                ),
-                ButtonSegment<OgLThemeMode>(
-                  value: OgLThemeMode.light,
-                  label: Text(_t('light')),
-                ),
-                ButtonSegment<OgLThemeMode>(
-                  value: OgLThemeMode.dark,
-                  label: Text(_t('dark')),
-                ),
-              ],
-              selected: <OgLThemeMode>{value.mode},
-              showSelectedIcon: false,
-              onSelectionChanged: (Set<OgLThemeMode> selection) {
-                if (selection.isNotEmpty) {
-                  _settings.setMode(selection.first);
-                }
-              },
+    theme,
+    title: _t('appearance'),
+    subtitle: _t('appearanceDesc'),
+    children: <Widget>[
+      _subTitle(theme, _t('themeMode')),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: SegmentedButton<OgLThemeMode>(
+          segments: <ButtonSegment<OgLThemeMode>>[
+            ButtonSegment<OgLThemeMode>(
+              value: OgLThemeMode.system,
+              label: Text(_t('followSystem')),
             ),
-          ),
-          const Divider(height: 24),
-          _subTitle(theme, _t('themeColor')),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: <Widget>[
-                for (final MapEntry<String, Color> entry
-                    in kOgLSeedColors.entries)
-                  ChoiceChip(
-                    avatar: CircleAvatar(
-                      backgroundColor: entry.value,
-                      radius: 10,
-                    ),
-                    label: Text(ogLSeedColorLabel(entry.key)),
-                    selected: value.seedColorId == entry.key,
-                    // 明环境下若沿用 M3 默认的 secondaryContainer，
-                    // 勾号（onSecondaryContainer）在浅色芯片上对比度偏低。
-                    // 这里改为**确定的 primary / onPrimary 组合**，深浅两态都有足够对比；
-                    // 并关掉勾号、保留色点（色点本身就是最强的选中线索）。
-                    showCheckmark: false,
-                    selectedColor: theme.colorScheme.primary,
-                    labelStyle: TextStyle(
-                      color: value.seedColorId == entry.key
-                          ? theme.colorScheme.onPrimary
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
-                    onSelected: (bool on) {
-                      if (on) {
-                        _settings.setSeedColor(entry.key);
-                      }
-                    },
-                  ),
-              ],
+            ButtonSegment<OgLThemeMode>(
+              value: OgLThemeMode.light,
+              label: Text(_t('light')),
             ),
-          ),
-          const Divider(height: 24),
-          _subTitle(theme, _t('density')),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: SegmentedButton<String>(
-              segments:  <ButtonSegment<String>>[
-                ButtonSegment<String>(
-                  value: 'comfortable',
-                  label: Text(_t('comfortable')),
-                ),
-                ButtonSegment<String>(
-                  value: 'compact',
-                  label: Text(_t('compact')),
-                ),
-              ],
-              selected: <String>{value.density},
-              showSelectedIcon: false,
-              onSelectionChanged: (Set<String> selection) {
-                if (selection.isNotEmpty) {
-                  _settings.setDensity(selection.first);
-                }
-              },
+            ButtonSegment<OgLThemeMode>(
+              value: OgLThemeMode.dark,
+              label: Text(_t('dark')),
             ),
-          ),
-          const Divider(height: 24),
-          _OgLSliderRow(
-            title: _t('fontScale'),
-            value: value.fontScale,
-            min: OgLSettings.minFontScale,
-            max: OgLSettings.maxFontScale,
-            divisions: 16,
-            display: (double v) => '${(100 * v).round()}%',
-            onCommit: _settings.setFontScale,
-          ),
-          const Divider(height: 24),
-          _motionTile(theme, value.motionLevel),
-          SwitchListTile(
-            title:  Text(_t('reduceMotionA11y')),
-            subtitle:  Text(_t('reduceMotionDesc')),
-            value: value.reduceMotion,
-            onChanged: _settings.setReduceMotion,
-          ),
-        ],
-      );
+          ],
+          selected: <OgLThemeMode>{value.mode},
+          showSelectedIcon: false,
+          onSelectionChanged: (Set<OgLThemeMode> selection) {
+            if (selection.isNotEmpty) {
+              _settings.setMode(selection.first);
+            }
+          },
+        ),
+      ),
+      const Divider(height: 24),
+      _subTitle(theme, _t('themeColor')),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            for (final MapEntry<String, Color> entry in kOgLSeedColors.entries)
+              ChoiceChip(
+                avatar: CircleAvatar(backgroundColor: entry.value, radius: 10),
+                label: Text(ogLSeedColorLabel(entry.key)),
+                selected: value.seedColorId == entry.key,
+                // 明环境下若沿用 M3 默认的 secondaryContainer，
+                // 勾号（onSecondaryContainer）在浅色芯片上对比度偏低。
+                // 这里改为**确定的 primary / onPrimary 组合**，深浅两态都有足够对比；
+                // 并关掉勾号、保留色点（色点本身就是最强的选中线索）。
+                showCheckmark: false,
+                selectedColor: theme.colorScheme.primary,
+                labelStyle: TextStyle(
+                  color: value.seedColorId == entry.key
+                      ? theme.colorScheme.onPrimary
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                onSelected: (bool on) {
+                  if (on) {
+                    _settings.setSeedColor(entry.key);
+                  }
+                },
+              ),
+          ],
+        ),
+      ),
+      const Divider(height: 24),
+      _subTitle(theme, _t('density')),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: SegmentedButton<String>(
+          segments: <ButtonSegment<String>>[
+            ButtonSegment<String>(
+              value: 'comfortable',
+              label: Text(_t('comfortable')),
+            ),
+            ButtonSegment<String>(value: 'compact', label: Text(_t('compact'))),
+          ],
+          selected: <String>{value.density},
+          showSelectedIcon: false,
+          onSelectionChanged: (Set<String> selection) {
+            if (selection.isNotEmpty) {
+              _settings.setDensity(selection.first);
+            }
+          },
+        ),
+      ),
+      const Divider(height: 24),
+      _OgLSliderRow(
+        title: _t('fontScale'),
+        value: value.fontScale,
+        min: OgLSettings.minFontScale,
+        max: OgLSettings.maxFontScale,
+        divisions: 16,
+        display: (double v) => '${(100 * v).round()}%',
+        onCommit: _settings.setFontScale,
+      ),
+      const Divider(height: 24),
+      _motionTile(theme, value.motionLevel),
+      SwitchListTile(
+        title: Text(_t('reduceMotionA11y')),
+        subtitle: Text(_t('reduceMotionDesc')),
+        value: value.reduceMotion,
+        onChanged: _settings.setReduceMotion,
+      ),
+    ],
+  );
 
   /// 动效档位（四档，横向分段）。
   Widget _motionTile(ThemeData theme, int level) {
@@ -677,7 +663,10 @@ class _SettingsPageState extends State<SettingsPage> {
           Row(
             children: <Widget>[
               Expanded(
-                child: Text(_t('motionLevel'), style: theme.textTheme.labelLarge),
+                child: Text(
+                  _t('motionLevel'),
+                  style: theme.textTheme.labelLarge,
+                ),
               ),
               Text(_motionShort[index], style: theme.textTheme.bodySmall),
             ],
@@ -703,174 +692,181 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  /// 语言。
-  Widget _languageSection(ThemeData theme) => _section(
-        theme,
-        title: _t('language'),
-        subtitle: _t('displayLanguage'),
-        children: <Widget>[
-          ListTile(
-            leading: const Icon(Icons.translate),
-            title: Text(_t('language')),
-            subtitle: Text(OgLI18n.instance.localeLabel),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: _pickLanguage,
-          ),
-        ],
-      );
-
   /// 代码与文件。
-  Widget _codeSection(BuildContext context, ThemeData theme, OgLSettings value) =>
-      _section(
-        theme,
-        title: _t('codeAndFiles'),
-        subtitle: _t('codeDesc'),
-        children: <Widget>[
-          SwitchListTile(
-            title: Text(_t('syntaxHighlight')),
-            subtitle:  Text(_t('codeColorDesc')),
-            value: value.codeHighlight,
-            onChanged: _settings.setCodeHighlight,
-          ),
-          _subTitle(theme, _t('highlightTheme')),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: <Widget>[
-                for (final MapEntry<String, String> entry
-                    in kOgLCodePresetLabels.entries)
-                  ChoiceChip(
-                    label: Text(ogLCodePresetLabel(entry.key)),
-                    selected: value.codeThemePreset == entry.key,
-                    // 同款修正：选中态用 primary 底 + onPrimary 字/勾，确保明环境下的对比度。
-                    selectedColor: theme.colorScheme.primary,
-                    checkmarkColor: theme.colorScheme.onPrimary,
-                    labelStyle: TextStyle(
-                      color: value.codeThemePreset == entry.key
-                          ? theme.colorScheme.onPrimary
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
-                    onSelected: (bool on) {
-                      if (on) {
-                        _settings.setCodeThemePreset(entry.key);
-                      }
-                    },
+  Widget _codeSection(
+    BuildContext context,
+    ThemeData theme,
+    OgLSettings value,
+  ) => _section(
+    theme,
+    title: _t('codeAndFiles'),
+    subtitle: _t('codeDesc'),
+    children: <Widget>[
+      SwitchListTile(
+        title: Text(_t('syntaxHighlight')),
+        subtitle: Text(_t('codeColorDesc')),
+        value: value.codeHighlight,
+        onChanged: _settings.setCodeHighlight,
+      ),
+      _subTitle(theme, _t('highlightTheme')),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            for (final MapEntry<String, String> entry
+                in kOgLCodePresetLabels.entries)
+              ChoiceChip(
+                label: Text(ogLCodePresetLabel(entry.key)),
+                selected: value.codeThemePreset == entry.key,
+                // 同款修正：选中态用 primary 底 + onPrimary 字/勾，确保明环境下的对比度。
+                selectedColor: theme.colorScheme.primary,
+                checkmarkColor: theme.colorScheme.onPrimary,
+                labelStyle: TextStyle(
+                  color: value.codeThemePreset == entry.key
+                      ? theme.colorScheme.onPrimary
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                onSelected: (bool on) {
+                  if (on) {
+                    _settings.setCodeThemePreset(entry.key);
+                  }
+                },
+              ),
+          ],
+        ),
+      ),
+      // 自定义配色块：条件内容带**过渡**（不再瞬间插拔）。
+      AnimatedSize(
+        duration: OgLAnim.medium(context),
+        curve: OgLAnim.curve(context),
+        alignment: Alignment.topCenter,
+        child: value.codeThemePreset == kOgLCodePresetCustom
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  const Divider(height: 1),
+                  _codeColorTile(
+                    theme,
+                    _t('tokenBackground'),
+                    'background',
+                    value.codeColorBackground,
                   ),
-              ],
-            ),
-          ),
-          // 自定义配色块：条件内容带**过渡**（不再瞬间插拔）。
-          AnimatedSize(
-            duration: OgLAnim.medium(context),
-            curve: OgLAnim.curve(context),
-            alignment: Alignment.topCenter,
-            child: value.codeThemePreset == kOgLCodePresetCustom
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      const Divider(height: 1),
-                      _codeColorTile(
-                        theme,
-                        _t('tokenBackground'),
-                        'background',
-                        value.codeColorBackground,
-                      ),
-                      _codeColorTile(
-                        theme,
-                        _t('tokenForeground'),
-                        'foreground',
-                        value.codeColorForeground,
-                      ),
-                      _codeColorTile(theme, _t('tokenKeyword'), 'keyword',
-                          value.codeColorKeyword),
-                      _codeColorTile(
-                        theme,
-                        _t('tokenType'),
-                        'typeName',
-                        value.codeColorTypeName,
-                      ),
-                      _codeColorTile(theme, _t('tokenString'), 'string',
-                          value.codeColorString),
-                      _codeColorTile(theme, _t('tokenComment'), 'comment',
-                          value.codeColorComment),
-                      _codeColorTile(theme, _t('tokenNumber'), 'number',
-                          value.codeColorNumber),
-                    ],
-                  )
-                : const SizedBox(width: double.infinity),
-          ),
-          SwitchListTile(
-            title: Text(_t('codeWrap')),
-            subtitle:  Text(_t('codeWrapDesc')),
-            value: value.codeWrap,
-            onChanged: _settings.setCodeWrap,
-          ),
-          _OgLSliderRow(
-            title: _t('codeFontSize'),
-            value: value.codeFontSize,
-            min: OgLSettings.minCodeFontSize,
-            max: OgLSettings.maxCodeFontSize,
-            divisions: 12,
-            display: (double v) => '${v.round()}',
-            onCommit: _settings.setCodeFontSize,
-          ),
-          SwitchListTile(
-            title: Text(_t('foldersFirst')),
-            subtitle:  Text(_t('foldersFirstDesc')),
-            value: value.foldersFirst,
-            onChanged: _settings.setFoldersFirst,
-          ),
-        ],
-      );
+                  _codeColorTile(
+                    theme,
+                    _t('tokenForeground'),
+                    'foreground',
+                    value.codeColorForeground,
+                  ),
+                  _codeColorTile(
+                    theme,
+                    _t('tokenKeyword'),
+                    'keyword',
+                    value.codeColorKeyword,
+                  ),
+                  _codeColorTile(
+                    theme,
+                    _t('tokenType'),
+                    'typeName',
+                    value.codeColorTypeName,
+                  ),
+                  _codeColorTile(
+                    theme,
+                    _t('tokenString'),
+                    'string',
+                    value.codeColorString,
+                  ),
+                  _codeColorTile(
+                    theme,
+                    _t('tokenComment'),
+                    'comment',
+                    value.codeColorComment,
+                  ),
+                  _codeColorTile(
+                    theme,
+                    _t('tokenNumber'),
+                    'number',
+                    value.codeColorNumber,
+                  ),
+                ],
+              )
+            : const SizedBox(width: double.infinity),
+      ),
+      SwitchListTile(
+        title: Text(_t('codeWrap')),
+        subtitle: Text(_t('codeWrapDesc')),
+        value: value.codeWrap,
+        onChanged: _settings.setCodeWrap,
+      ),
+      _OgLSliderRow(
+        title: _t('codeFontSize'),
+        value: value.codeFontSize,
+        min: OgLSettings.minCodeFontSize,
+        max: OgLSettings.maxCodeFontSize,
+        divisions: 12,
+        display: (double v) => '${v.round()}',
+        onCommit: _settings.setCodeFontSize,
+      ),
+      SwitchListTile(
+        title: Text(_t('foldersFirst')),
+        subtitle: Text(_t('foldersFirstDesc')),
+        value: value.foldersFirst,
+        onChanged: _settings.setFoldersFirst,
+      ),
+    ],
+  );
 
   /// 网络 / DNS / 下载并发 / 加速通道。
   ///
   /// 这些内容渲染在**独立的网络设置页**里（见 `network_page.dart`），
   /// 不再是一个"可折叠分组"。
-  List<Widget> _networkTiles(BuildContext context, ThemeData theme, OgLSettings value) => <Widget>[
-          SwitchListTile(
-            title: Text(_t('customDns')),
-            subtitle:  Text(_t('dnsModeDesc')),
-            value: value.dnsMode == 'custom',
-            onChanged: (bool on) {
-              widget.surface.setDnsMode(on ? 'custom' : 'system');
-            },
-          ),
-          // 自定义 DNS 子项：条件内容带**过渡**（不再瞬间插拔）。
-          AnimatedSize(
-            duration: OgLAnim.medium(context),
-            curve: OgLAnim.curve(context),
-            alignment: Alignment.topCenter,
-            child: value.dnsMode == 'custom'
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: <Widget>[
-                      ListTile(
-                        leading: const Icon(Icons.dns_outlined),
-                        title:  Text(_t('dnsServer')),
-                        subtitle: Text(
-                          widget.surface.dnsServerChoices[value.dnsServerId] ??
-                              value.dnsServerId,
-                        ),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: _pickDnsServer,
-                      ),
-                      SwitchListTile(
-                        title: Text(_t('doh')),
-                        subtitle:  Text(_t('dnsServerDesc')),
-                        value: value.dnsPreferDoh,
-                        onChanged: widget.surface.setDnsPreferDoh,
-                      ),
-                    ],
-                  )
-                : const SizedBox(width: double.infinity),
-          ),
-const Divider(height: 1),
-          ..._downloadTiles(theme, value),
-          ..._accelTiles(context, theme, value),
-        ];
+  List<Widget> _networkTiles(
+    BuildContext context,
+    ThemeData theme,
+    OgLSettings value,
+  ) => <Widget>[
+    SwitchListTile(
+      title: Text(_t('customDns')),
+      subtitle: Text(_t('dnsModeDesc')),
+      value: value.dnsMode == 'custom',
+      onChanged: (bool on) {
+        widget.surface.setDnsMode(on ? 'custom' : 'system');
+      },
+    ),
+    // 自定义 DNS 子项：条件内容带**过渡**（不再瞬间插拔）。
+    AnimatedSize(
+      duration: OgLAnim.medium(context),
+      curve: OgLAnim.curve(context),
+      alignment: Alignment.topCenter,
+      child: value.dnsMode == 'custom'
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                ListTile(
+                  leading: const Icon(Icons.dns_outlined),
+                  title: Text(_t('dnsServer')),
+                  subtitle: Text(
+                    widget.surface.dnsServerChoices[value.dnsServerId] ??
+                        value.dnsServerId,
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _pickDnsServer,
+                ),
+                SwitchListTile(
+                  title: Text(_t('doh')),
+                  subtitle: Text(_t('dnsServerDesc')),
+                  value: value.dnsPreferDoh,
+                  onChanged: widget.surface.setDnsPreferDoh,
+                ),
+              ],
+            )
+          : const SizedBox(width: double.infinity),
+    ),
+    const Divider(height: 1),
+    ..._downloadTiles(theme, value),
+    ..._accelTiles(context, theme, value),
+  ];
 
   /// 打开**网络设置页**（独立页面；不再是可折叠分组）。
   ///
@@ -891,28 +887,12 @@ const Divider(height: 1),
     );
   }
 
-  /// 存储位置：三档（公共目录 / 已授权文件夹 / 应用私有目录）。
-  ///
-  /// 与权限网关同一套裁决（`OgLStorage.plan()`）；这里只负责**如实展示**与
-  /// 提供入口：选文件夹（SAF）/ 取消授权 / 打开「所有文件访问」设置。
-  Widget _storageSection(ThemeData theme) => Card(
-        clipBehavior: Clip.antiAlias,
-        margin: const EdgeInsets.only(bottom: 12),
-        child: ListTile(
-          leading: const Icon(Icons.folder_outlined),
-          title: Text(OgLI18n.instance.t('shell', 'storageAccess')),
-          subtitle: Text(OgLI18n.instance.t('shell', 'storageGrantDesc1')),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: _showStorage,
-        ),
-      );
-
   /// 存储弹窗。
   Future<void> _showStorage() async {
     // 每次都**重新探测**（用户可能刚在系统设置里改过权限）。
     final String mode = await widget.surface.appStorageMode();
-    final ({String path, bool visible}) info =
-        await widget.surface.appStorageInfo();
+    final ({String path, bool visible}) info = await widget.surface
+        .appStorageInfo();
     final String? saf = await widget.surface.safTreeUri();
     if (!mounted) {
       return;
@@ -924,7 +904,7 @@ const Divider(height: 1),
     };
     await _showOgLDialog<void>(
       builder: (BuildContext dialogContext) => AlertDialog(
-        title:  Text(OgLI18n.instance.t('shell', 'storageAccess')),
+        title: Text(OgLI18n.instance.t('shell', 'storageAccess')),
         content: SizedBox(
           width: _dialogWidth(dialogContext),
           child: SingleChildScrollView(
@@ -932,9 +912,14 @@ const Divider(height: 1),
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                Text(modeText, style: Theme.of(dialogContext).textTheme.titleSmall),
+                Text(
+                  modeText,
+                  style: Theme.of(dialogContext).textTheme.titleSmall,
+                ),
                 const SizedBox(height: 6),
-                Text('${OgLI18n.instance.t('shell', 'storageWhere')}：${info.path}'),
+                Text(
+                  '${OgLI18n.instance.t('shell', 'storageWhere')}：${info.path}',
+                ),
                 if (!info.visible) ...<Widget>[
                   const SizedBox(height: 8),
                   Text(OgLI18n.instance.t('shell', 'storageHintModern')),
@@ -956,20 +941,20 @@ const Divider(height: 1),
           if (!info.visible)
             TextButton(
               onPressed: () => unawaited(_requestAllFiles(dialogContext)),
-              child:  Text(_t('storageOpenAllFiles')),
+              child: Text(_t('storageOpenAllFiles')),
             ),
           TextButton(
             onPressed: () => unawaited(_pickSafFolder(dialogContext)),
-            child:  Text(_t('storagePickFolder')),
+            child: Text(_t('storagePickFolder')),
           ),
           if (saf != null)
             TextButton(
               onPressed: () => unawaited(_clearSafFolder(dialogContext)),
-              child:  Text(_t('storageClearFolder')),
+              child: Text(_t('storageClearFolder')),
             ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child:  Text(_tc('close')),
+            child: Text(_tc('close')),
           ),
         ],
       ),
@@ -983,8 +968,9 @@ const Divider(height: 1),
       storageProbe: widget.surface.ensureStorage,
       storageLocation: widget.surface.appStoragePath,
     );
-    final OgLPermissionStatus status =
-        await gateway.request(OgLPermission.storage);
+    final OgLPermissionStatus status = await gateway.request(
+      OgLPermission.storage,
+    );
     if (!mounted) {
       return;
     }
@@ -1032,16 +1018,15 @@ const Divider(height: 1),
   Future<T?> _showOgLDialog<T>({
     required WidgetBuilder builder,
     bool barrierDismissible = true,
-  }) =>
-      showDialog<T>(
-        context: context,
-        barrierDismissible: barrierDismissible,
-        animationStyle: AnimationStyle(
-          duration: OgLAnim.fast(context),
-          curve: OgLAnim.curve(context),
-        ),
-        builder: builder,
-      );
+  }) => showDialog<T>(
+    context: context,
+    barrierDismissible: barrierDismissible,
+    animationStyle: AnimationStyle(
+      duration: OgLAnim.fast(context),
+      curve: OgLAnim.curve(context),
+    ),
+    builder: builder,
+  );
 
   /// 弹窗内容宽度统一收口（原来 460 / 520 两种写法并存）：
   /// 大屏上限 [max]，小屏取 90% 屏宽；色板的 280 是**下限**（随字号放大）。
@@ -1055,26 +1040,26 @@ const Divider(height: 1),
   /// 只给固定档位（1 / 2 / 4 / 8）：用户不需要理解 TCP，只需要「快一点 / 稳一点」。
   /// 服务端不支持 Range 时中枢层会自动回退单连接，所以调高并发不会把下载搞坏。
   List<Widget> _downloadTiles(ThemeData theme, OgLSettings value) => <Widget>[
-        ListTile(
-          leading: const Icon(Icons.download_outlined),
-          title: Text(_t('downloadConnections')),
-          subtitle: Text(_t('downloadConnectionsDesc')),
-          // 有「选择弹窗」的行带 chevron（与同卡其它可点行一致）。
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              Text(
-                _t('connectionsCount', <String, Object?>{
-                  'count': value.downloadConnections,
-                }),
-              ),
-              const SizedBox(width: 4),
-              const Icon(Icons.chevron_right, size: 18),
-            ],
+    ListTile(
+      leading: const Icon(Icons.download_outlined),
+      title: Text(_t('downloadConnections')),
+      subtitle: Text(_t('downloadConnectionsDesc')),
+      // 有「选择弹窗」的行带 chevron（与同卡其它可点行一致）。
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Text(
+            _t('connectionsCount', <String, Object?>{
+              'count': value.downloadConnections,
+            }),
           ),
-          onTap: () => unawaited(_pickDownloadConnections(value)),
-        ),
-      ];
+          const SizedBox(width: 4),
+          const Icon(Icons.chevron_right, size: 18),
+        ],
+      ),
+      onTap: () => unawaited(_pickDownloadConnections(value)),
+    ),
+  ];
 
   Future<void> _pickDownloadConnections(OgLSettings value) async {
     final int? picked = await _showOgLDialog<int>(
@@ -1087,9 +1072,11 @@ const Divider(height: 1),
               child: Row(
                 children: <Widget>[
                   Expanded(
-                    child: Text(_t('connectionsCount', <String, Object?>{
-                      'count': choice,
-                    })),
+                    child: Text(
+                      _t('connectionsCount', <String, Object?>{
+                        'count': choice,
+                      }),
+                    ),
                   ),
                   if (choice == value.downloadConnections)
                     const Icon(Icons.check, size: 18),
@@ -1116,11 +1103,15 @@ const Divider(height: 1),
   /// 设计：**只有一个总开关**；下面是通道列表（内置 + 自定义），可多选一。
   /// 开启总开关前若尚未同意当前版本协议，会先弹出协议并要求勾选同意
   /// （同意版本与时间会落盘，作为凭据）。
-  List<Widget> _accelTiles(BuildContext context, ThemeData theme, OgLSettings value) {
+  List<Widget> _accelTiles(
+    BuildContext context,
+    ThemeData theme,
+    OgLSettings value,
+  ) {
     final List<Widget> tiles = <Widget>[
       SwitchListTile(
-        title:  Text(_t('accelTitle')),
-        subtitle:  Text(_t('accelDesc')),
+        title: Text(_t('accelTitle')),
+        subtitle: Text(_t('accelDesc')),
         value: value.releaseProxyEnabled,
         onChanged: (bool on) => unawaited(_toggleAccel(on)),
       ),
@@ -1146,7 +1137,8 @@ const Divider(height: 1),
                     title: Text(
                       _t('accelScopesHint'),
                       style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant),
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
                   for (final OgLAccelScope scope in OgLAccelScope.values)
@@ -1165,7 +1157,8 @@ const Divider(height: 1),
                     title: Text(
                       _tc('accelSelfProvided'),
                       style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant),
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
                   // 私有仓库加速 = 把令牌交给第三方代理。这里给一个**永久开关**：
@@ -1214,30 +1207,34 @@ const Divider(height: 1),
                         tooltip: _t('removeChannel'),
                         icon: const Icon(Icons.delete_outline),
                         onPressed: () => unawaited(
-                            widget.surface.removeAccelChannel(channel.id)),
+                          widget.surface.removeAccelChannel(channel.id),
+                        ),
                       ),
                       onTap: () => unawaited(
-                          widget.surface.setReleaseProxySelected(channel.id)),
+                        widget.surface.setReleaseProxySelected(channel.id),
+                      ),
                     ),
                   ListTile(
                     leading: const Icon(Icons.add),
-                    title:  Text(_t('addCustomChannel')),
+                    title: Text(_t('addCustomChannel')),
                     subtitle: Text(_t('accelAddHint')),
                     onTap: _addAccelChannel,
                   ),
                   ListTile(
                     leading: const Icon(Icons.gavel_outlined),
-                    title:  Text(_t('viewAccelAgreement')),
+                    title: Text(_t('viewAccelAgreement')),
                     subtitle: Text(
                       value.accelConsentCurrent
                           ? (value.releaseProxyConsentAt == null
-                              ? _t('consented', {
-                                  'version': '${value.releaseProxyConsentVersion}',
-                                })
-                              : _t('consentedAt', {
-                                  'version': '${value.releaseProxyConsentVersion}',
-                                  'at': '${value.releaseProxyConsentAt}',
-                                }))
+                                ? _t('consented', {
+                                    'version':
+                                        '${value.releaseProxyConsentVersion}',
+                                  })
+                                : _t('consentedAt', {
+                                    'version':
+                                        '${value.releaseProxyConsentVersion}',
+                                    'at': '${value.releaseProxyConsentAt}',
+                                  }))
                           : _t('notConsented'),
                     ),
                     trailing: const Icon(Icons.chevron_right),
@@ -1408,9 +1405,8 @@ const Divider(height: 1),
                   // 先定性：本文不产生法律效力，唯一生效的是 Apache-2.0。
                   Text(
                     OgLI18n.instance.t('onboarding', 'legalStatementOnly'),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
+                    style: Theme.of(context).textTheme.bodySmall
+                        ?.copyWith(color: Theme.of(context).colorScheme.error),
                   ),
                   const Divider(height: 24),
                   Text(ogLAccelAgreement()),
@@ -1419,17 +1415,17 @@ const Divider(height: 1),
                   Text(
                     _tc('accelLangNote'),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          fontStyle: FontStyle.italic,
-                        ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     OgLI18n.instance.t('onboarding', 'licenseOfficialCopy'),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          fontStyle: FontStyle.italic,
-                        ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
                   // 勾选框紧贴声明文字（阅读顺序：先读文，再勾选）——
                   // 原来塞在 `actions` 里，屏幕阅读器与视觉顺序都是倒的。
@@ -1437,8 +1433,9 @@ const Divider(height: 1),
                     const SizedBox(height: 12),
                     CheckboxListTile(
                       value: agreed,
-                      onChanged: (bool? v) => setLocal(() => agreed = v ?? false),
-                      title:  Text(_t('agreeRead')),
+                      onChanged: (bool? v) =>
+                          setLocal(() => agreed = v ?? false),
+                      title: Text(_t('agreeRead')),
                       controlAffinity: ListTileControlAffinity.leading,
                       dense: true,
                       contentPadding: EdgeInsets.zero,
@@ -1451,13 +1448,13 @@ const Divider(height: 1),
           actions: <Widget>[
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(false),
-              child:  Text(_t('disagree')),
+              child: Text(_t('disagree')),
             ),
             FilledButton(
               onPressed: agreed
                   ? () => Navigator.of(dialogContext).pop(true)
                   : null,
-              child:  Text(_t('agreeContinue')),
+              child: Text(_t('agreeContinue')),
             ),
           ],
         ),
@@ -1480,7 +1477,7 @@ const Divider(height: 1),
     final TextEditingController url = TextEditingController();
     final bool? ok = await _showOgLDialog<bool>(
       builder: (BuildContext dialogContext) => AlertDialog(
-        title:  Text(_t('addCustomChannel')),
+        title: Text(_t('addCustomChannel')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1499,7 +1496,7 @@ const Divider(height: 1),
             const Divider(height: 20),
             TextField(
               controller: name,
-              decoration:  InputDecoration(
+              decoration: InputDecoration(
                 labelText: _t('channelName'),
                 hintText: _t('channelNameHint'),
                 border: OutlineInputBorder(),
@@ -1508,7 +1505,7 @@ const Divider(height: 1),
             const SizedBox(height: 12),
             TextField(
               controller: url,
-              decoration:  InputDecoration(
+              decoration: InputDecoration(
                 labelText: _t('channelUrl'),
                 hintText: 'https://example.com/',
                 border: OutlineInputBorder(),
@@ -1519,11 +1516,11 @@ const Divider(height: 1),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
-            child:  Text(_t('cancel')),
+            child: Text(_t('cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.of(dialogContext).pop(true),
-            child:  Text(_t('add')),
+            child: Text(_t('add')),
           ),
         ],
       ),
@@ -1540,10 +1537,13 @@ const Divider(height: 1),
       _notifier.warning(error);
       return;
     }
-    final String label = name.text.trim().isEmpty ? _t('customChannel') : name.text.trim();
+    final String label = name.text.trim().isEmpty
+        ? _t('customChannel')
+        : name.text.trim();
     final String id = 'custom-${DateTime.now().millisecondsSinceEpoch}';
-    await widget.surface
-        .upsertAccelChannel(OgLAccelChannel(id: id, name: label, baseUrl: url.text));
+    await widget.surface.upsertAccelChannel(
+      OgLAccelChannel(id: id, name: label, baseUrl: url.text),
+    );
     name.dispose();
     url.dispose();
     if (mounted) {
@@ -1551,106 +1551,62 @@ const Divider(height: 1),
     }
   }
 
-  /// 账户。
-  Widget _accountSection(ThemeData theme) => _section(
-        theme,
-        title: _t('account'),
-        subtitle: _t('currentAccount'),
-        children: <Widget>[
-          // 「读取中 → 已登录 / 未登录」切换的是**高度不同**的行：
-          // 用常驻 `AnimatedSize` 承载这次换挡（档位 0 → 零时长 = 立即跳变）。
-          AnimatedSize(
-            duration: OgLAnim.medium(context),
-            curve: OgLAnim.curve(context),
-            alignment: Alignment.topCenter,
-            child: FutureBuilder<GhAccount?>(
-              future: _accountFuture,
-              builder: (
-                BuildContext context,
-                AsyncSnapshot<GhAccount?> snapshot,
-              ) {
-                if (snapshot.connectionState != ConnectionState.done) {
-                  return ListTile(
-                    leading: Icon(Icons.key),
-                    title: Text(_t('readingAccount')),
-                  );
-                }
-                final GhAccount? account = snapshot.data;
-                if (account == null) {
-                  return ListTile(
-                    leading: Icon(Icons.key),
-                    title: Text(_t('notLoggedIn')),
-                    subtitle: Text(_t('notLoggedInHint')),
-                  );
-                }
-                // 危险区（退出登录）已迁到「用户页」，这里只展示身份。
-                return ListTile(
-                  leading: const Icon(Icons.key),
-                  title: Text('@${account.login}'),
-                  subtitle: Text(_t('accountId', {'id': account.id})),
-                );
-              },
-            ),
-          ),
-        ],
-      );
-
   /// 维护。
   Widget _maintenanceSection(ThemeData theme) => _section(
-        theme,
-        title: _t('maintenance'),
-        subtitle: _t('guideAndReset'),
-        children: <Widget>[
-          ListTile(
-            leading: const Icon(Icons.privacy_tip_outlined),
-            title: Text(_t('permissionsGuide')),
-            subtitle:  Text(_t('recheckPermissions')),
-            onTap: _openOnboarding,
-          ),
-          const Divider(height: 1),
-          ListTile(
-            leading: const Icon(Icons.settings_backup_restore),
-            title: Text(_t('resetSettings')),
-            subtitle:  Text(_t('restoreDefaults')),
-            onTap: _reset,
-          ),
-        ],
-      );
+    theme,
+    title: _t('maintenance'),
+    subtitle: _t('guideAndReset'),
+    children: <Widget>[
+      ListTile(
+        leading: const Icon(Icons.privacy_tip_outlined),
+        title: Text(_t('permissionsGuide')),
+        subtitle: Text(_t('recheckPermissions')),
+        onTap: _openOnboarding,
+      ),
+      const Divider(height: 1),
+      ListTile(
+        leading: const Icon(Icons.settings_backup_restore),
+        title: Text(_t('resetSettings')),
+        subtitle: Text(_t('restoreDefaults')),
+        onTap: _reset,
+      ),
+    ],
+  );
 
   /// 开源许可：**合并为一条**，打开时弹窗（本项目 + 第三方依赖）。
   Widget _licenseSection(ThemeData theme) => Card(
-        clipBehavior: Clip.antiAlias,
-        margin: const EdgeInsets.only(bottom: 12),
-        child: Column(
-          children: <Widget>[
-            ListTile(
-              leading: const Icon(Icons.gavel_outlined),
-              title: Text(_t('licenses')),
-              subtitle:  Text(_t('licensesDesc')),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _showLicenses,
-            ),
-            const Divider(height: 1),
-            // 法律文本：**逐语言对照查看**。引导页那份面向首次阅读（重点 +
-            // 折叠全文），这里面向查阅 —— 可以把全部可用语言逐个调出来。
-            // 效力以中文为准的声明在该页顶部常驻。
-            ListTile(
-              leading: const Icon(Icons.translate),
-              title: Text(_t('legalText')),
-              subtitle:  Text(_t('legalLanguages')),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => unawaited(
-                Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(
-                    builder: (BuildContext context) =>
-                        LegalTextPage(surface: widget.surface),
-                  ),
-                ),
+    clipBehavior: Clip.antiAlias,
+    margin: const EdgeInsets.only(bottom: 12),
+    child: Column(
+      children: <Widget>[
+        ListTile(
+          leading: const Icon(Icons.gavel_outlined),
+          title: Text(_t('licenses')),
+          subtitle: Text(_t('licensesDesc')),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: _showLicenses,
+        ),
+        const Divider(height: 1),
+        // 法律文本：**逐语言对照查看**。引导页那份面向首次阅读（重点 +
+        // 折叠全文），这里面向查阅 —— 可以把全部可用语言逐个调出来。
+        // 效力以中文为准的声明在该页顶部常驻。
+        ListTile(
+          leading: const Icon(Icons.translate),
+          title: Text(_t('legalText')),
+          subtitle: Text(_t('legalLanguages')),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => unawaited(
+            Navigator.of(context).push<void>(
+              MaterialPageRoute<void>(
+                builder: (BuildContext context) =>
+                    LegalTextPage(surface: widget.surface),
               ),
             ),
-          ],
+          ),
         ),
-      );
+      ],
+    ),
+  );
 
   /// 展示 **Apache-2.0 全文**（从打进资源的 `LICENSE` 读取）。
   ///
@@ -1670,7 +1626,9 @@ const Divider(height: 1),
     }
     await _showOgLDialog<void>(
       builder: (BuildContext dialogContext) => AlertDialog(
-        title: Text('${OgLProjectInfo.licenseId} · ${OgLProjectInfo.licenseName}'),
+        title: Text(
+          '${OgLProjectInfo.licenseId} · ${OgLProjectInfo.licenseName}',
+        ),
         content: ConstrainedBox(
           // ★ 不写死 `height: 460`：小屏（如 480×800 的设备、被系统放大
           //   字体、或横屏）上 460 会超出 AlertDialog 可用高度，直接溢出。
@@ -1709,7 +1667,7 @@ const Divider(height: 1),
   Future<void> _showLicenses() async {
     await _showOgLDialog<void>(
       builder: (BuildContext dialogContext) => AlertDialog(
-        title:  Text(_t('licenses')),
+        title: Text(_t('licenses')),
         content: SizedBox(
           width: _dialogWidth(dialogContext),
           child: SingleChildScrollView(
@@ -1733,7 +1691,7 @@ const Divider(height: 1),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.inventory_2_outlined),
-                  title:  Text(_t('thirdPartyDeps')),
+                  title: Text(_t('thirdPartyDeps')),
                   subtitle: Text(
                     _t('depsCount', {'count': kOgLDependencyLicenses.length}),
                   ),
@@ -1752,97 +1710,12 @@ const Divider(height: 1),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
-            child:  Text(_tc('close')),
+            child: Text(_tc('close')),
           ),
         ],
       ),
     );
   }
-
-  /// 日志（应用运行日志），**默认收起**。
-  ///
-  /// 折叠组而非 `_section` 的"常展开卡片"：日志随时可能很长，展开态会把
-  /// 后面的分组整体推下首屏；需要时点标题展开。（这是根级分组里唯一的折叠
-  /// 例外——厚度无上限的那一个。展开动画同样接动效档位，见 `surface_bridge`
-  /// 的 `expansionTileTheme`。）
-  Widget _logsSection(ThemeData theme) => Card(
-        clipBehavior: Clip.antiAlias,
-        margin: const EdgeInsets.only(bottom: 12),
-        child: ExpansionTile(
-          // 收起态不构建日志正文（ExpansionTile 关闭时不建 children），
-          // 长日志不会拖累设置页首帧。
-          title: Semantics(
-            header: true,
-            child: Text(_t('logs'), style: theme.textTheme.titleMedium),
-          ),
-          subtitle: Text(_t('logsDesc'), style: theme.textTheme.bodySmall),
-          childrenPadding: EdgeInsets.zero,
-          children: <Widget>[
-            ListenableBuilder(
-              listenable: OgLAppLog.instance,
-              builder: (BuildContext context, Widget? _) {
-                final List<String> allLines = OgLAppLog.instance.entries
-                    .map((OgLAppLogEntry entry) => entry.toDisplay())
-                    .toList();
-                final int shown = allLines.length > _logTailShown
-                    ? _logTailShown
-                    : allLines.length;
-                final List<String> tail =
-                    allLines.sublist(allLines.length - shown);
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    ListTile(
-                      leading: const Icon(Icons.description_outlined),
-                      title: Text(_t('currentLogFile')),
-                      subtitle: Text(OgLLogFile.filePath ?? _t('logDisabled')),
-                    ),
-                    if (!OgLLogFile.isEnabled)
-                      ListTile(
-                        leading: Icon(
-                          Icons.error_outline,
-                          color: theme.colorScheme.error,
-                        ),
-                        title: Text(_t('logDisabledReason')),
-                        subtitle: Text(OgLLogFile.lastError ?? _t('unknown')),
-                      ),
-                    // 空态 ↔ 正文的切换由常驻 `AnimatedSize` 承载：
-                    // 两种状态高度不同，不再瞬间跳变（档位 0 → 零时长 = 立即切换）。
-                    AnimatedSize(
-                      duration: OgLAnim.medium(context),
-                      curve: OgLAnim.curve(context),
-                      alignment: Alignment.topCenter,
-                      child: tail.isEmpty
-                          ? ListTile(title: Text(_t('noLogs')))
-                          : Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                              child: SelectableText(
-                                tail.join('\n'),
-                                style: const TextStyle(
-                                  fontFamily: 'monospace',
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
-                    ),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 8, bottom: 8),
-                        child: TextButton.icon(
-                          onPressed: () => _copyLogs(allLines),
-                          icon: const Icon(Icons.content_copy, size: 16),
-                          label: Text(_t('copyAllLogs')),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
-      );
 
   // ───────────────────────── 通用零件 ─────────────────────────
 
@@ -1852,37 +1725,36 @@ const Divider(height: 1),
     required String title,
     required List<Widget> children,
     String subtitle = '',
-  }) =>
-      Card(
-        clipBehavior: Clip.antiAlias,
-        margin: const EdgeInsets.only(bottom: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            ListTile(
-              // 分组标题进无障碍语义（`header: true`）：屏幕阅读器可以按标题
-              // 跳转分组，而不是把标题当成普通一行念过去。
-              title: Semantics(
-                header: true,
-                child: Text(title, style: theme.textTheme.titleMedium),
-              ),
-              subtitle: subtitle.isEmpty
-                  ? null
-                  : Text(subtitle, style: theme.textTheme.bodySmall),
-            ),
-            ...children,
-          ],
+  }) => Card(
+    clipBehavior: Clip.antiAlias,
+    margin: const EdgeInsets.only(bottom: 12),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        ListTile(
+          // 分组标题进无障碍语义（`header: true`）：屏幕阅读器可以按标题
+          // 跳转分组，而不是把标题当成普通一行念过去。
+          title: Semantics(
+            header: true,
+            child: Text(title, style: theme.textTheme.titleMedium),
+          ),
+          subtitle: subtitle.isEmpty
+              ? null
+              : Text(subtitle, style: theme.textTheme.bodySmall),
         ),
-      );
+        ...children,
+      ],
+    ),
+  );
 
   /// 分组内的二级小标题。
   Widget _subTitle(ThemeData theme, String text) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(text, style: theme.textTheme.labelLarge),
-        ),
-      );
+    padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+    child: Align(
+      alignment: Alignment.centerLeft,
+      child: Text(text, style: theme.textTheme.labelLarge),
+    ),
+  );
 
   /// 自定义配色的一行：名称 + 当前颜色 + 选择入口。
   Widget _codeColorTile(
@@ -1890,36 +1762,35 @@ const Divider(height: 1),
     String label,
     String field,
     int argb,
-  ) =>
-      ListTile(
-        dense: true,
-        title: Text(label),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            // 色块进无障碍语义：屏幕阅读器能念出当前颜色的十六进制值，
-            // 而不是只报一个装饰性容器（写法对照色板的 Semantics）。
-            Semantics(
-              label: _t('colorSwatch', <String, Object?>{
-                'color': '#${(argb & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}',
-              }),
-              child: Container(
-                width: 24,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: Color(argb),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: theme.colorScheme.outlineVariant),
-                ),
-              ),
+  ) => ListTile(
+    dense: true,
+    title: Text(label),
+    trailing: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        // 色块进无障碍语义：屏幕阅读器能念出当前颜色的十六进制值，
+        // 而不是只报一个装饰性容器（写法对照色板的 Semantics）。
+        Semantics(
+          label: _t('colorSwatch', <String, Object?>{
+            'color': '#${(argb & 0xFFFFFF).toRadixString(16).padLeft(6, '0')}',
+          }),
+          child: Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: Color(argb),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
             ),
-            const SizedBox(width: 8),
-            const Icon(Icons.chevron_right),
-          ],
+          ),
         ),
-        onTap: () => _pickCodeColor(field, argb, _t('chooseColor', {'label': label})),
-      );
-
+        const SizedBox(width: 8),
+        const Icon(Icons.chevron_right),
+      ],
+    ),
+    onTap: () =>
+        _pickCodeColor(field, argb, _t('chooseColor', {'label': label})),
+  );
 }
 
 /// 一条滑块设置行（标题 + 当前值 + 拖动条）。
@@ -1972,8 +1843,9 @@ class _OgLSliderRowState extends State<_OgLSliderRow> {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final double current =
-        (_draft ?? widget.value).clamp(widget.min, widget.max).toDouble();
+    final double current = (_draft ?? widget.value)
+        .clamp(widget.min, widget.max)
+        .toDouble();
     // 标题 / 当前值 / 滑块合成**一个**无障碍节点：屏幕阅读器读一次
     // "标题 + 当前值"，滑动时也不用在三个节点之间跳（MergeSemantics）。
     return MergeSemantics(

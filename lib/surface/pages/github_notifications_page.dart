@@ -11,7 +11,12 @@ import 'notifications_page.dart';
 import 'pull_page.dart';
 
 class GithubNotificationsPage extends StatefulWidget {
-  const GithubNotificationsPage({required this.surface, super.key});
+  const GithubNotificationsPage({
+    required this.surface,
+    this.initialTab = 0,
+    super.key,
+  });
+  final int initialTab;
   final SurfaceBridge surface;
   @override
   State<GithubNotificationsPage> createState() =>
@@ -20,22 +25,72 @@ class GithubNotificationsPage extends StatefulWidget {
 
 class _GithubNotificationsPageState extends State<GithubNotificationsPage> {
   final List<Map<String, dynamic>> _items = [];
-  bool _busy = false, _more = true, _all = false;
+  bool _busy = false, _more = true, _all = false, _marking = false;
+  int _generation = 0;
+  String? _status;
   int _page = 1;
   String? _error;
   @override
   void initState() {
     super.initState();
+    widget.surface.domain.auth.addListener(_accountChanged);
     _load(reset: true);
+  }
+
+  @override
+  void dispose() {
+    widget.surface.domain.auth.removeListener(_accountChanged);
+    super.dispose();
+  }
+
+  void _accountChanged() {
+    if (!mounted) return;
+    _generation++;
+    setState(() {
+      _items.clear();
+      _page = 1;
+      _more = true;
+      _busy = false;
+      _marking = false;
+      _error = null;
+      _status = null;
+    });
+    _load(reset: true);
+  }
+
+  Future<void> _readAll() async {
+    if (_busy || _marking) return;
+    final generation = _generation;
+    setState(() {
+      _marking = true;
+      _error = null;
+      _status = null;
+    });
+    try {
+      await widget.surface.markAllGithubNotificationsRead();
+      if (!mounted || generation != _generation) return;
+      setState(() => _status = aiText('markAllReadSubmitted'));
+      await _load(reset: true);
+    } catch (e) {
+      if (mounted && generation == _generation) {
+        setState(() => _error = aiError(e));
+      }
+    } finally {
+      if (mounted && generation == _generation) {
+        setState(() => _marking = false);
+      }
+    }
   }
 
   Future<void> _load({bool reset = false}) async {
     if (_busy) {
       return;
     }
+    final generation = _generation;
     setState(() {
       _busy = true;
       _error = null;
+      if (reset) _items.clear();
     });
     try {
       final next = reset ? 1 : _page;
@@ -43,7 +98,7 @@ class _GithubNotificationsPageState extends State<GithubNotificationsPage> {
         page: next,
         all: _all,
       );
-      if (mounted) {
+      if (mounted && generation == _generation) {
         setState(() {
           if (reset) {
             _items.clear();
@@ -54,26 +109,29 @@ class _GithubNotificationsPageState extends State<GithubNotificationsPage> {
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && generation == _generation) {
         setState(() => _error = aiError(e));
       }
     } finally {
-      if (mounted) {
+      if (mounted && generation == _generation) {
         setState(() => _busy = false);
       }
     }
   }
 
   Future<void> _read(Map<String, dynamic> item) async {
+    if (_marking || _busy) return;
+    final generation = _generation;
     try {
       await widget.surface.markGithubNotificationRead('${item['id']}');
-      if (mounted) {
+      if (mounted && generation == _generation) {
         setState(() {
           item['unread'] = false;
+          if (!_all) _items.remove(item);
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && generation == _generation) {
         setState(() => _error = aiError(e));
       }
     }
@@ -118,6 +176,7 @@ class _GithubNotificationsPageState extends State<GithubNotificationsPage> {
   @override
   Widget build(BuildContext context) => DefaultTabController(
     length: 2,
+    initialIndex: widget.initialTab,
     child: Scaffold(
       appBar: AppBar(
         title: Text(aiText('notifications')),
@@ -132,17 +191,36 @@ class _GithubNotificationsPageState extends State<GithubNotificationsPage> {
         children: [
           Column(
             children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed:
+                      _busy ||
+                          _marking ||
+                          _error != null ||
+                          !_items.any((item) => item['unread'] == true)
+                      ? null
+                      : _readAll,
+                  icon: const Icon(Icons.done_all),
+                  label: Text(aiText('markAllRead')),
+                ),
+              ),
+              if (_status != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(_status!),
+                ),
               SwitchListTile(
                 title: Text(aiText('showRead')),
                 value: _all,
-                onChanged: _busy
+                onChanged: _busy || _marking
                     ? null
                     : (v) {
                         setState(() => _all = v);
                         _load(reset: true);
                       },
               ),
-              if (_busy) const LinearProgressIndicator(),
+              if (_busy || _marking) const LinearProgressIndicator(),
               if (_error != null)
                 ListTile(
                   title: Text(_error!),
@@ -159,13 +237,13 @@ class _GithubNotificationsPageState extends State<GithubNotificationsPage> {
                     itemCount: _items.length + 1,
                     itemBuilder: (context, index) {
                       if (index == _items.length) {
-                        if (_items.isEmpty && !_busy) {
+                        if (_items.isEmpty && !_busy && _error == null) {
                           return Padding(
                             padding: const EdgeInsets.all(32),
                             child: Text(aiText('noNotifications')),
                           );
                         }
-                        return _more && !_busy
+                        return _more && !_busy && !_marking && _error == null
                             ? TextButton(
                                 onPressed: _load,
                                 child: Text(aiText('loadMore')),
@@ -177,7 +255,10 @@ class _GithubNotificationsPageState extends State<GithubNotificationsPage> {
                       final unread = item['unread'] == true;
                       return Card(
                         elevation: 1,
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
                         child: InkWell(
                           onTap: () => _open(item),
                           borderRadius: BorderRadius.circular(12),
@@ -189,19 +270,24 @@ class _GithubNotificationsPageState extends State<GithubNotificationsPage> {
                                   unread
                                       ? Icons.mark_email_unread_outlined
                                       : Icons.drafts_outlined,
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
                                   size: 20,
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         '${subject['title']}',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontWeight: FontWeight.w500),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
@@ -210,7 +296,9 @@ class _GithubNotificationsPageState extends State<GithubNotificationsPage> {
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
                                         ),
                                       ),
                                       Text(
@@ -219,7 +307,9 @@ class _GithubNotificationsPageState extends State<GithubNotificationsPage> {
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                           fontSize: 12,
-                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant,
                                         ),
                                       ),
                                     ],
@@ -229,7 +319,9 @@ class _GithubNotificationsPageState extends State<GithubNotificationsPage> {
                                   IconButton(
                                     tooltip: aiText('markRead'),
                                     icon: const Icon(Icons.done),
-                                    onPressed: () => _read(item),
+                                    onPressed: _busy || _marking
+                                        ? null
+                                        : () => _read(item),
                                   ),
                               ],
                             ),
@@ -242,7 +334,7 @@ class _GithubNotificationsPageState extends State<GithubNotificationsPage> {
               ),
             ],
           ),
-          const NotificationsPage(),
+          const NotificationsPage(embedded: true),
         ],
       ),
     ),
