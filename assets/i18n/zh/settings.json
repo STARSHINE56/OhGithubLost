@@ -161,5 +161,7 @@
   "appearanceGroup": "外观与体验",
   "networkStorageGroup": "网络与存储",
   "accountGroup": "账户",
-  "aboutGroup": "关于与维护"
+  "aboutGroup": "关于与支持",
+  "assistantGroup": "AI 助手",
+  "maintenanceGroup": "应用与维护"
 }
