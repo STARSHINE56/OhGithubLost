@@ -105,9 +105,19 @@ def verify(pattern, expected_code=None):
                                '--print-certs', str(apk)], capture_output=True, text=True)
         if proc.returncode:
             raise ValueError('apksigner verification failed: ' + apk.name)
-        found = re.findall(r'^Signer #\d+ certificate SHA-256 digest:\s*(\S+)', proc.stdout, re.M)
-        if len(found) != 1 or fingerprint(found[0]) != expected:
-            raise ValueError('Unexpected APK signing certificate: ' + apk.name)
+        # With --verbose, current apksigner prints v3/v3.1 signers by SDK range
+        # instead of "Signer #1". Check every range, including rotation entries.
+        found = re.findall(
+            r'^Signer (?:#\d+|\(minSdkVersion=.*\)) certificate SHA-256 digest:\s*(\S+)',
+            proc.stdout, re.M)
+        signer_count = re.search(r'^Number of signers:\s*(\d+)\s*$', proc.stdout, re.M)
+        numbered_signers = set(re.findall(r'^Signer #(\d+) certificate SHA-256 digest:', proc.stdout, re.M))
+        if (not found or any(fingerprint(value) != expected for value in found)
+                or (signer_count and int(signer_count[1]) != 1)
+                or len(numbered_signers) > 1):
+            # Fingerprints are public, but do not dump the complete tool output.
+            raise ValueError('Unexpected APK signing certificate: ' + apk.name
+                             + ' (observed SHA-256: ' + ', '.join(found) + ')')
         badging = subprocess.run([sdk_tool('aapt'), 'dump', 'badging', str(apk)],
                                  capture_output=True, text=True, check=True).stdout
         match = re.search(r"package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'", badging)
