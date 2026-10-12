@@ -143,26 +143,6 @@ jobs:
             build: apk
             args: --release --split-per-abi --target-platform android-arm64
             artifact: build/app/outputs/flutter-apk/*arm64-v8a*.apk
-          - label: Android · armeabi-v7a
-            os: ubuntu-latest
-            build: apk
-            args: --release --split-per-abi --target-platform android-arm
-            artifact: build/app/outputs/flutter-apk/*armeabi-v7a*.apk
-          - label: Android · x86_64
-            os: ubuntu-latest
-            build: apk
-            args: --release --split-per-abi --target-platform android-x64
-            artifact: build/app/outputs/flutter-apk/*x86_64*.apk
-          - label: Android · universal-APK
-            os: ubuntu-latest
-            build: apk
-            args: --release
-            artifact: build/app/outputs/flutter-apk/app-release.apk
-          - label: Android · AAB
-            os: ubuntu-latest
-            build: appbundle
-            args: --release
-            artifact: build/app/outputs/bundle/release/*.aab
           - label: Windows · x64
             os: windows-latest
             build: windows

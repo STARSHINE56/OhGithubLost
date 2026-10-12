@@ -29,7 +29,7 @@ jobs:
           - platform: android
             target: apk
             os: ubuntu-latest
-            artifact: build/app/outputs/flutter-apk/app-debug.apk
+            artifact: build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk
           - platform: windows
             target: windows
             os: windows-latest
@@ -77,6 +77,7 @@ jobs:
       - name: 编译开发包
         run: >-
           flutter build ${{ matrix.target }} --debug
+          ${{ matrix.platform == 'android' && '--split-per-abi --target-platform android-arm64' || '' }}
           ${{ steps.android_version.outputs.version_code && format('--build-number={0}', steps.android_version.outputs.version_code) || '' }}
       - name: apksigner 核验固定签名、包名及版本号
         if: matrix.platform == 'android'

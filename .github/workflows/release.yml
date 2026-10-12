@@ -2,7 +2,7 @@
 # OGL · fork 正式发布工作流（Android）
 #
 # 与上游 build.yml 的关系：本工作流面向本 fork（STARSHINE56）的 Android 正式
-# 发布，只构建 APK / AAB，复用仓库既有工具（boot_manifest.py / android_signing.py
+# 发布，只构建 ARM64 APK，复用仓库既有工具（boot_manifest.py / android_signing.py
 # / inject_platform_spec.py）。上游 build.yml 的全平台发布仍可继续使用。
 #
 # 引导清单（Boot Manifest）由 fork 自有密钥 OGL_BOOT_KEY 签名（v3 信任根，
@@ -120,14 +120,6 @@ jobs:
             build: apk
             args: '--release --tree-shake-icons --split-per-abi --target-platform android-arm64'
             artifact: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
-          - label: universal-APK
-            build: apk
-            args: '--release --tree-shake-icons'
-            artifact: build/app/outputs/flutter-apk/app-release.apk
-          - label: AAB
-            build: appbundle
-            args: '--release'
-            artifact: build/app/outputs/bundle/release/app-release.aab
     steps:
       - name: 拉取代码
         uses: actions/checkout@v4
@@ -256,7 +248,7 @@ jobs:
               echo ""
               echo "- 通道：$CH"
               echo "- 版本：$VN（Android build $VNUM）"
-              echo "- 产物：ARM64 APK、universal APK 与 AAB（固定 Release 签名）"
+              echo "- 产物：ARM64 APK（固定 Release 签名）"
             } > notes.md
             echo "→ 正文来源：自动模板"
           fi
@@ -272,6 +264,4 @@ jobs:
           target_commitish: ${{ github.sha }}
           files: |
             dist/arm64-APK/app-arm64-v8a-release.apk
-            dist/universal-APK/app-release.apk
-            dist/AAB/app-release.aab
           fail_on_unmatched_files: true
