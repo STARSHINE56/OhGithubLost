@@ -160,6 +160,9 @@ def main():
         check('compileSdk 已标记', 'OGL_PLATFORM_SPEC compileSdk' in gradle_text)
         check('desugaring 已标记', 'OGL_PLATFORM_SPEC desugaring' in gradle_text)
         check('固定签名已注入', 'OGL_PLATFORM_SPEC fixedSigning' in gradle_text)
+        check('Properties 导入避免 Gradle java 扩展遮蔽',
+              gradle_text.startswith('import java.util.Properties as OglSigningProperties')
+              and 'OglSigningProperties().apply' in gradle_text)
         check('release 不再使用 debug 配置',
               'signingConfig = signingConfigs.debug' not in gradle_text)
         check('debug 与 release 共用固定签名',

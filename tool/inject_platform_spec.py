@@ -336,7 +336,7 @@ def patch_android_signing(root: str, step: dict) -> int:
     if count != 1 or text.count('android {') != 1:
         raise ValueError('Cannot locate the Flutter release signing configuration')
     config = '''// OGL_PLATFORM_SPEC fixedSigning
-val oglSigningProperties = java.util.Properties().apply {
+val oglSigningProperties = OglSigningProperties().apply {
     val configFile = rootProject.file("key.properties")
     require(configFile.isFile) { "Missing fixed Android signing: run tool/android_signing.py prepare" }
     configFile.inputStream().use { load(it) }
@@ -359,6 +359,9 @@ require(file(oglSigningProperty("storeFile")).isFile) { "Android signing keystor
     }
     buildTypes.getByName("debug").signingConfig = signingConfigs.getByName("oglRelease")
 ''', 1)
+    # Gradle exposes a `java` extension; import the class to avoid shadowing
+    # the java package while compiling the Kotlin DSL script.
+    text = 'import java.util.Properties as OglSigningProperties\n\n' + text
     _write(path, text)
     return 0
 
