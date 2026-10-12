@@ -65,5 +65,8 @@
   "minimizeWindow": "Свернуть",
   "maximizeWindow": "Развернуть",
   "restoreWindow": "Восстановить",
-  "closeWindow": "Закрыть"
+  "closeWindow": "Закрыть",
+  "appSlogan": "GitHub Client",
+  "mainNav": "Main Navigation",
+  "tools": "Tools"
 }
