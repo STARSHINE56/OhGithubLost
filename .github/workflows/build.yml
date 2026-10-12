@@ -63,7 +63,7 @@ jobs:
   manifest:
     name: 生成引导清单（Ed25519签名）
     # fork 的普通提交使用 preview.yml；签名发布仍要求自行配置密钥。
-    if: github.repository == 'yingo-server/OhGithubLost' || github.event_name == 'workflow_dispatch'
+    if: github.repository == 'OGL-Teams/OhGithubLost' || github.repository == 'yingo-server/OhGithubLost' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     outputs:
       android_version_code: ${{ steps.android_version.outputs.version_code }}
@@ -132,7 +132,8 @@ jobs:
     # ★ 6.0.1 起加超时兜底：Linux 腿曾因容器源超时挂死 5h50m，
     #   托管 runner 默认上限 6h，等于白烧配额。45 分钟足够跑完全平台。
     timeout-minutes: 45
-    continue-on-error: ${{ matrix.best_effort == true }}
+    # 当前所有矩阵目标均为必过项；不再读取已经移除的 best_effort 字段。
+    continue-on-error: false
     strategy:
       fail-fast: false
       matrix:

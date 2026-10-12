@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   preview:
-    if: github.repository != 'yingo-server/OhGithubLost'
+    if: github.repository != 'OGL-Teams/OhGithubLost' && github.repository != 'yingo-server/OhGithubLost'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:

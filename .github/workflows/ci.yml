@@ -5,12 +5,16 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'improvement/**', 'feature/**', starshine56]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -60,7 +64,15 @@ jobs:
       - name: 静态分析（警告即失败）
         run: flutter analyze --fatal-infos --fatal-warnings
 
+      - name: AI 安全自检
+        run: dart run tool/ai_safety_selftest.dart
+
+      - name: APK 体积报告工具自检
+        run: python3 tool/apk_size_report_selftest.py
+
       - name: 单元测试（含渲染快照）
+        env:
+          OGL_SCREENSHOTS: '1'
         run: flutter test --reporter expanded
 
       # 渲染快照产物：把主壳在 N 套主题 × N 种屏幕形态下真实渲染成 PNG 上传。

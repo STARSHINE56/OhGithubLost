@@ -1,0 +1,6 @@
+# actionlint 1.7.4 的内置标签表早于这些 GitHub hosted ARM64 runner。
+# 只补充当前构建矩阵已使用的标签，不忽略其他工作流错误。
+self-hosted-runner:
+  labels:
+    - windows-11-arm
+    - ubuntu-24.04-arm
