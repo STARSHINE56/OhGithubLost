@@ -23,6 +23,7 @@ import '../kernel/contract/module.dart';
 import '../kernel/contract/net_types.dart';
 import '../kernel/contract/storage_export.dart';
 import '../kernel/environment.dart';
+import 'ai/ai_models.dart';
 import 'ai/ai_provider.dart';
 import 'ai/ai_service.dart';
 import 'gh/gh_api.dart';
