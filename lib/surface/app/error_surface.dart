@@ -494,10 +494,13 @@ class _OgLNoticeHostState extends State<OgLNoticeHost>
       _presentAmbient(notice);
       return;
     }
+    // 改成横幅，不弹窗，不挡住用户点击
+    _presentAmbient(notice);
+    return;
+    // 下面的代码原来处理弹窗关闭后的逻辑，现在不需要了
+    /*
     showDialog<void>(
       context: navContext,
-      // 严重告警**必须被阅读**：遮罩点击与系统返回键都不允许关掉，
-      // 只留「知道了」这一个出口（避免误触把关键告警一扫而过）。
       barrierDismissible: false,
       builder: (BuildContext context) => PopScope(
         canPop: false,
