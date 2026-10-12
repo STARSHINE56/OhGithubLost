@@ -2,7 +2,7 @@
 .dart_tool/
 .packages
 build/
-pubspec.lock
+# 可执行应用跟踪 pubspec.lock，锁定 CI / Release 的依赖解析。
 
 # IDE
 .idea/

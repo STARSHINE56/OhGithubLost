@@ -4,6 +4,7 @@ library;
 import 'dart:convert';
 
 import '../../kernel/contract/disk_store.dart';
+import 'ai_conversation_store.dart';
 import 'ai_models.dart';
 import 'ai_provider.dart';
 
@@ -17,7 +18,9 @@ class AiService {
     required this.account,
     this.accountGithub,
   }) : _store = store,
-       _vault = vault;
+       _vault = vault,
+       _chats = AiConversationStore(vault);
+  final AiConversationStore _chats;
   final DiskKv _store;
   final DiskVault _vault;
   final AiGithubRequest github;
@@ -157,15 +160,9 @@ class AiService {
   /// 私有代码也可能出现在历史里，因此历史与审计均保存在加密保险库。
   Future<List<AiConversation>> conversations() async {
     final id = await _account();
-    final raw = await _vault.readSecret('ai.chats.$id');
-    if (raw == null) {
-      return [];
-    }
-    return (jsonDecode(raw) as List)
-        .map(
-          (e) => AiConversation.fromJson(Map<String, dynamic>.from(e as Map)),
-        )
-        .toList();
+    final chats = await _chats.list(id);
+    await _checkAccount(id);
+    return chats;
   }
 
   Future<AiConversation> newConversation({
@@ -187,25 +184,14 @@ class AiService {
 
   Future<void> saveConversation(AiConversation chat) async {
     await _checkAccount(chat.accountId);
-    final list = await conversations();
-    list.removeWhere((e) => e.id == chat.id);
-    list.insert(0, chat);
+    await _chats.save(chat);
     await _checkAccount(chat.accountId);
-    await _vault.writeSecret(
-      'ai.chats.${chat.accountId}',
-      jsonEncode(list.take(50).map((e) => e.toJson()).toList()),
-    );
   }
 
   Future<void> deleteConversation(String id) async {
     final user = await _account();
-    final list = await conversations();
-    list.removeWhere((e) => e.id == id);
+    await _chats.delete(user, id);
     await _checkAccount(user);
-    await _vault.writeSecret(
-      'ai.chats.$user',
-      jsonEncode(list.map((e) => e.toJson()).toList()),
-    );
   }
 
   Future<List<Map<String, dynamic>>> audit() async {
