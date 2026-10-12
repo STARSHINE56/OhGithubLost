@@ -15,7 +15,7 @@
 | `OGL_ANDROID_KEY_PASSWORD` | 私钥密码 |
 | `OGL_ANDROID_KEY_ALIAS` | 私钥别名 |
 | `OGL_ANDROID_CERT_SHA256` | 对应证书 SHA-256，64 位十六进制 |
-| `OGL_BOOT_KEY` | 正式发布原有 Ed25519 引导私钥，与 APK 签名无关 |
+| `OGL_BOOT_KEY` | 与本 fork 内嵌 v3 公钥匹配的 Ed25519 引导私钥，与 APK 签名无关 |
 
 `tool/android_signing.py prepare` 将 keystore 写到 runner 临时目录，密码及别名
 写到被忽略的 `android/key.properties`，权限均为 0600。缺少签名 Secret、证书
@@ -52,5 +52,12 @@ versionCode，失败则不上传 APK。报告为 `build/android-signing-report.j
 
 `6de3100f44fd49f255277a3683dee0a06c525345e500dd111bfd78d1c3df4f35`
 
-上游 Ed25519 启动校验保持原样：正式 `build.yml` 仍需与内嵌公钥匹配的
-`OGL_BOOT_KEY`。本次 APK 签名修复不生成或轮换这把密钥。
+本 fork 自 v7.6 使用独立的 v3 Ed25519 引导信任根，见
+`lib/kernel/boot/release_trust_root.dart`。`release.yml` 和手动 `build.yml`
+均需与当前内嵌公钥匹配的 `OGL_BOOT_KEY`；上游 v2 私钥不能替代它。
+后续合并上游时必须单独审查信任根，不要直接覆盖上游公钥或复用其私钥。
+
+`release.yml` 在签名构建前执行同提交的质量门，保留 universal APK/AAB，
+并额外生成 ARM64 APK。用 `tool/apk_size_report.py` 记录 APK 文件实际字节数；
+Actions artifact 压缩体积不能当作 APK 大小。所有架构共用原有固定签名、包名
+和 manifest job 生成的 versionCode，不重新生成密钥。

@@ -5,8 +5,8 @@
 /// - 应用启动时用这里的**公钥**校验签名；签名不符 → 拒绝启动；
 /// - 私钥**不再随仓库保管**：存放于 GitHub Actions Secret（`OGL_BOOT_KEY`），
 ///   由构建流程在 CI 内临时还原使用（轮换记录见 `.github/signing/README.md`）；
-/// - **密钥版本：v2（2026-10-02 全量轮换）**。历史版本各自内嵌各自的清单与公钥，
-///   不受影响；外部签名物（如 Mod 清单）需用 v2 重签后才能在 1.1+ 上通过校验。
+/// - **密钥版本：v3（fork 自有信任根）**。历史版本各自内嵌各自的清单与公钥，
+///   不受影响；供本 fork 校验的外部签名物需由匹配 v3 的私钥签署。
 ///
 /// 防脱节：`test/kernel/boot_release_chain_test.dart` 用**固定签名样本**
 /// （`test/kernel/fixtures/release_key_signed_manifest.json`，由发布私钥签出）

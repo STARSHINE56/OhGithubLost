@@ -28,5 +28,19 @@
 | `stats_chart.py` | 统计曲线自检（CI 门禁 selftest） |
 | `sort_imports.py` | import 分组排序 |
 | `verify_apk_cert.py` | APK 证书校验（发布后验收） |
+| `apk_size_report.py` | APK 实际字节数、按 ABI/资源分类的 ZIP 内容占比；只读、不解压 |
+| `apk_size_report_selftest.py` | 体积报告工具离线自检（临时 ZIP、字节核算、只读保证、损坏包拒绝） |
+
+## APK 体积分析
+
+```sh
+python3 tool/apk_size_report.py build/app/outputs/flutter-apk/app-arm64-v8a-release.apk --out build/apk-size-arm64.json
+python3 tool/apk_size_report_selftest.py
+```
+
+`actual_bytes` 是安装包本身的文件大小，`actual_mib` 使用 1024² 换算；
+`compressed_content_bytes` 是 ZIP 条目压缩后大小之和，容器开销另计。
+Actions artifact 的二次压缩大小与 APK 实际大小不是同一指标。
+先按相同 ABI、Release 模式比较，再判断资源或代码是否冗余；不能删功能来瘦身。
 
 > 说明：本机运维脚本（推送 / CI 排障 / 发布触发）不入库，见本地 `_setup/`。
