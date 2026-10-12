@@ -88,6 +88,10 @@ class _OgLClientShellState extends State<OgLClientShell>
   bool _checked = false;
   bool _guest = false;
   String? _accountId;
+  int _authGeneration = 0;
+  bool _foreground = true;
+  int _pollFailures = 0;
+  DateTime? _nextPollAt;
 
   /// 是否已完成首次引导（设置在 `runApp` 之前已加载，直接读取即可）。
   bool _onboardingDone = false;
@@ -104,10 +108,9 @@ class _OgLClientShellState extends State<OgLClientShell>
     _check();
     if (widget.surface.hasAi) {
       WidgetsBinding.instance.addObserver(this);
-      _pollTimer = Timer.periodic(
-        const Duration(seconds: 30),
-        (_) => unawaited(_pollEvents(updates: _pollTick++ % 10 == 0)),
-      );
+      _foreground = WidgetsBinding.instance.lifecycleState == null ||
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+      if (_foreground) _startPolling();
     }
   }
 
@@ -119,21 +122,39 @@ class _OgLClientShellState extends State<OgLClientShell>
     super.dispose();
   }
 
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => unawaited(_pollEvents(updates: _pollTick++ % 10 == 0)),
+    );
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
+    _foreground = state == AppLifecycleState.resumed;
+    if (_foreground) {
+      _nextPollAt = null;
+      _startPolling();
       unawaited(_pollEvents(updates: true));
+    } else {
+      _pollTimer?.cancel();
+      _pollTimer = null;
     }
   }
 
   /// 运行中检查；应用被系统终止时不承诺实时通知，恢复后补查。
   Future<void> _pollEvents({bool updates = false}) async {
-    if (_polling || !widget.surface.hasAi || _accountId == null) {
+    if (!mounted || !_foreground ||
+        _polling || !widget.surface.hasAi || _accountId == null ||
+        (_nextPollAt != null && DateTime.now().isBefore(_nextPollAt!))) {
       return;
     }
     _polling = true;
+    final accountId = _accountId;
     try {
       final builds = await widget.surface.aiPollBuilds();
+      if (!mounted || accountId != _accountId) return;
       for (final build in builds) {
         final run = build['run'] as Map;
         final success = run['conclusion'] == 'success';
@@ -146,6 +167,7 @@ class _OgLClientShellState extends State<OgLClientShell>
       }
       if (updates) {
         final changes = await widget.surface.pollRepoUpdates();
+        if (!mounted || accountId != _accountId) return;
         for (final change in changes) {
           final text = aiText(
             change['release'] == true ? 'newRelease' : 'newCommit',
@@ -158,7 +180,14 @@ class _OgLClientShellState extends State<OgLClientShell>
         }
       }
       _lastPollError = null;
+      _pollFailures = 0;
+      _nextPollAt = null;
     } catch (error) {
+      if (!mounted || accountId != _accountId) return;
+      _pollFailures = (_pollFailures + 1).clamp(1, 5);
+      _nextPollAt = DateTime.now().add(
+        Duration(seconds: 30 * (1 << _pollFailures)),
+      );
       final text = aiError(error);
       if (_lastPollError != text) {
         _lastPollError = text;
@@ -259,6 +288,7 @@ class _OgLClientShellState extends State<OgLClientShell>
   }
 
   Future<void> _check() async {
+    final generation = ++_authGeneration;
     String? accountId;
     try {
       final account = await widget.surface.domain.auth.activeAccount();
@@ -273,10 +303,15 @@ class _OgLClientShellState extends State<OgLClientShell>
       );
       accountId = null;
     }
-    if (!mounted) {
+    if (!mounted || generation != _authGeneration) {
       return;
     }
     setState(() {
+      if (_accountId != accountId) {
+        _lastPollError = null;
+        _pollFailures = 0;
+        _nextPollAt = null;
+      }
       _accountId = accountId;
       _checked = true;
       if (accountId != null) {

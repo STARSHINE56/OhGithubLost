@@ -15,6 +15,7 @@ class AiService {
     required this.github,
     required this.provider,
     required this.account,
+    this.accountGithub,
   }) : _store = store,
        _vault = vault;
   final DiskKv _store;
@@ -22,7 +23,28 @@ class AiService {
   final AiGithubRequest github;
   final AiProviderRequest provider;
   final Future<String?> Function() account;
+  final Future<Object?> Function(
+    String accountId,
+    String method,
+    String path,
+    Map<String, Object?>? body,
+    Map<String, String> query,
+  )? accountGithub;
   bool _busy = false, _polling = false;
+  String? _modelCacheId, _modelCacheKey;
+  List<String> _modelCache = const [];
+  DateTime? _modelCacheAt;
+
+  /// 每个操作固定账号；网络队列等待期间切号也不能换用新账号令牌。
+  AiGithubRequest _githubFor(String id) => (method, path, body, query) async {
+    await _checkAccount(id);
+    final bound = accountGithub;
+    final result = bound == null
+        ? await github(method, path, body, query)
+        : await bound(id, method, path, body, query);
+    await _checkAccount(id);
+    return result;
+  };
 
   /// 仓库名与路径使用严格校验；禁止模型构造完整 URL 或越界 API 路径。
   static void validateRepo(String repo) {
@@ -78,6 +100,10 @@ class AiService {
     bool clearKey = false,
   }) async {
     AiProvider.validate(value);
+    _modelCacheId = null;
+    _modelCacheKey = null;
+    _modelCache = const [];
+    _modelCacheAt = null;
     if (clearKey) {
       await _vault.deleteSecret(value.keyId);
     }
@@ -88,13 +114,25 @@ class AiService {
   }
 
   /// 只接受官方 /models 返回的 ID，没有任何预设模型名称。
-  Future<List<String>> detectModels({String? key, AiSettings? config}) async {
+  Future<List<String>> detectModels({
+    String? key,
+    AiSettings? config,
+    bool refresh = true,
+  }) async {
     final value = config ?? await settings();
     final secret = key?.trim().isNotEmpty == true
         ? key!.trim()
         : await _vault.readSecret(value.keyId);
     if (secret == null || secret.isEmpty) {
       throw const AiException('keyRequired');
+    }
+    final at = _modelCacheAt;
+    if (!refresh &&
+        _modelCacheId == value.keyId &&
+        _modelCacheKey == secret &&
+        at != null &&
+        DateTime.now().difference(at) < const Duration(minutes: 5)) {
+      return List<String>.of(_modelCache);
     }
     final response = await provider(value, 'models', secret, null);
     final models =
@@ -109,6 +147,10 @@ class AiService {
     if (models.isEmpty) {
       throw const AiException('noModels');
     }
+    _modelCacheId = value.keyId;
+    _modelCacheKey = secret;
+    _modelCacheAt = DateTime.now();
+    _modelCache = List<String>.unmodifiable(models);
     return models;
   }
 
@@ -209,8 +251,11 @@ class AiService {
       if (key == null || key.isEmpty) {
         throw const AiException('keyRequired');
       }
-      final models = await detectModels();
+      var models = await detectModels(config: config, key: key, refresh: false);
       final model = config.model.isEmpty ? models.first : config.model;
+      if (!models.contains(model)) {
+        models = await detectModels(config: config, key: key);
+      }
       if (!models.contains(model)) {
         throw const AiException('modelUnavailable');
       }
@@ -333,6 +378,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
 
   Future<void> switchRepo(AiConversation chat, String target) async {
     await _checkAccount(chat.accountId);
+    final github = _githubFor(chat.accountId);
     String repo = target;
     if (!target.contains('/')) {
       final response = await github('GET', '/search/repositories', null, {
@@ -370,6 +416,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
     AiConfirmation confirm,
   ) async {
     await _checkAccount(chat.accountId);
+    final github = _githubFor(chat.accountId);
     if (name == 'switch_repository') {
       await switchRepo(chat, args['repository'] as String);
       return {'repository': chat.repo, 'branch': chat.branch};
@@ -533,6 +580,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
     String message,
   ) async {
     await _checkAccount(chat.accountId);
+    final github = _githubFor(chat.accountId);
     validateRepo(chat.repo);
     if (changes.isEmpty || changes.length > 30 || message.trim().isEmpty) {
       throw const AiException('invalidProposal');
@@ -630,6 +678,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
     AiConfirmation confirm,
   ) async {
     await _checkAccount(proposal.accountId);
+    final github = _githubFor(proposal.accountId);
     validateRepo(proposal.repo);
     if (!await confirm(proposal)) {
       await _record(proposal.accountId, {
@@ -752,6 +801,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
   ) async {
     final root = '/repos/${proposal.repo}';
     final branch = _encodePath(proposal.branch);
+    final github = _githubFor(proposal.accountId);
     await _checkAccount(proposal.accountId);
     final head =
         await github('GET', '$root/git/ref/heads/$branch', null, {}) as Map;
@@ -804,6 +854,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
     String path,
     Map<String, Object?> body,
   ) async {
+    final github = _githubFor(proposal.accountId);
     Map<String, Object?>? before;
     if (method == 'PATCH') {
       final original = await github('GET', path, null, {}) as Map;
@@ -831,6 +882,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
     AiConfirmation confirm,
   ) async {
     final user = await _account();
+    final github = _githubFor(user);
     // 撤销记录属于原账号；切号后不能使用新账号的 token 执行旧记录。
     if (entry['accountId'] != user) {
       throw const AiException('accountChanged');
@@ -918,6 +970,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
 
   Future<List<Map<String, dynamic>>> _pollBuilds() async {
     final user = await _account();
+    final github = _githubFor(user);
     final raw = await _vault.readSecret('ai.runs.$user');
     if (raw == null) {
       return [];

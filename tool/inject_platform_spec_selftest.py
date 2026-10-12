@@ -360,6 +360,30 @@ def main():
         check('原有依赖未被破坏',
               'androidx.core:core-ktx' in deps_text)
 
+        print('⑫b 单行 dependencies / 已开启开关 / 错误旧标记')
+        import inject_platform_spec as injector
+        old_cwd = os.getcwd()
+        try:
+            os.chdir(tmp)
+            for prefix in ('', '// OGL_PLATFORM_SPEC desugaring\n'):
+                edge = 'edge.gradle.kts'
+                with open(edge, 'w', encoding='utf-8') as fh:
+                    fh.write(prefix + 'android {\n'
+                             '    buildFeatures { buildConfig = true }\n'
+                             '    compileOptions {\n'
+                             '        isCoreLibraryDesugaringEnabled = true\n'
+                             '    }\n}\ndependencies {}\n')
+                check('边界模板注入成功', injector.patch_core_library_desugaring(
+                    tmp, {'file': edge}) == 0)
+                edge_text = read(edge)
+                check('单行依赖块实际声明 desugar', injector.DESUGAR_DEP in edge_text)
+                check('标记只加在开关行',
+                      'buildConfig = true  // OGL_PLATFORM_SPEC' not in edge_text)
+                injector.patch_core_library_desugaring(tmp, {'file': edge})
+                check('边界模板重跑幂等', read(edge) == edge_text)
+        finally:
+            os.chdir(old_cwd)
+
         print('⑬ 图标管线（源图 → 三端）')
         # ★ 这一节守的是一次真实的静默故障：`desktop_icon.render_rgba` 早先
         #   用 `grads.get('url(#id)')` 去查以 `id` 为键的表，永远查不到，

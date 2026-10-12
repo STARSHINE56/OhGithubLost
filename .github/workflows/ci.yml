@@ -39,6 +39,14 @@ jobs:
       - name: 获取依赖
         run: flutter pub get
 
+      - name: 保存 SDK 解析的依赖锁文件
+        uses: actions/upload-artifact@v4
+        with:
+          name: resolved-pubspec-lock
+          path: pubspec.lock
+          if-no-files-found: error
+          retention-days: 7
+
       # 结构与多语言审计：把「四层依赖方向」「界面文案是否全部本地化」
       # 变成**可执行的门禁**（违反即失败），而不是只写在文档里靠人记。
       - name: 分层审计（依赖只能向下）

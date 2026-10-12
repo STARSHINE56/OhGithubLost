@@ -464,6 +464,7 @@ class DomainLayerModule extends OgLModule {
         store: base.disk.kv,
         vault: base.disk.vault,
         github: githubRequest,
+        accountGithub: notificationGithub,
         provider: provider.request,
         account: ghAuth.activeAccountId,
       ),

@@ -34,6 +34,7 @@ class _AiChatPageState extends State<AiChatPage> {
   List<AiConversation> _history = [];
   bool _loading = true, _sending = false;
   String? _error;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
@@ -65,8 +66,10 @@ class _AiChatPageState extends State<AiChatPage> {
   }
 
   Future<void> _load({bool keep = false, bool fresh = false}) async {
+    final generation = ++_loadGeneration;
     try {
       final list = await widget.surface.aiConversations();
+      if (!mounted || generation != _loadGeneration) return;
       AiConversation? chat;
       if (keep) {
         chat = list.where((e) => e.id == _chat?.id).firstOrNull;
@@ -85,7 +88,7 @@ class _AiChatPageState extends State<AiChatPage> {
         repo: widget.repo,
         branch: widget.branch,
       );
-      if (mounted) {
+      if (mounted && generation == _loadGeneration) {
         setState(() {
           _history = list;
           _chat = chat;
@@ -94,7 +97,7 @@ class _AiChatPageState extends State<AiChatPage> {
       }
       _bottom();
     } catch (e) {
-      if (mounted) {
+      if (mounted && generation == _loadGeneration) {
         setState(() {
           _error = aiError(e);
           _loading = false;
@@ -104,7 +107,7 @@ class _AiChatPageState extends State<AiChatPage> {
   }
 
   void _bottom() => WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (_scroll.hasClients) {
+    if (mounted && _scroll.hasClients) {
       _scroll.jumpTo(_scroll.position.maxScrollExtent);
     }
   });
@@ -123,7 +126,12 @@ class _AiChatPageState extends State<AiChatPage> {
       final request = widget.surface.aiSend(
         _chat!,
         text,
-        (proposal) => confirmAiProposal(context, proposal),
+        (proposal) async {
+          if (!mounted || ModalRoute.of(context)?.isCurrent != true) {
+            return false;
+          }
+          return confirmAiProposal(context, proposal);
+        },
       );
       setState(() {});
       _bottom();

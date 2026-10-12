@@ -436,9 +436,7 @@ def patch_core_library_desugaring(root: str, step: dict) -> int:
                 else "    coreLibraryDesugaring '%s'" % DESUGAR_DEP)
 
     text = _read(path)
-    if 'OGL_PLATFORM_SPEC desugaring' in text:
-        print('  [已存在] desugaring（%s）' % path)
-        return 0
+    # 标记不是完整性的证明；旧版可能标错行或漏依赖，重跑需修复。
 
     updated = text
     # ① 开关：模板里可能已经开了（那就只补标记），也可能压根没有（要插入）。
@@ -447,9 +445,11 @@ def patch_core_library_desugaring(root: str, step: dict) -> int:
                     r'coreLibraryDesugaringEnabled\s*=\s*true',
                     r'coreLibraryDesugaringEnabled\s+true'):
         if re.search(pattern, updated):
-            updated = re.sub(
-                r'([^\n]*?true)', r'\1  // OGL_PLATFORM_SPEC desugaring',
-                updated, count=1)
+            # 只标记命中的开关；不得匹配文件中第一个任意 true。
+            if not re.search(pattern + r'[^\n]*OGL_PLATFORM_SPEC desugaring', updated):
+                updated = re.sub(
+                    pattern, lambda match: match.group(0) +
+                    '  // OGL_PLATFORM_SPEC desugaring', updated, count=1)
             switched = True
             break
     if not switched:
@@ -467,9 +467,10 @@ def patch_core_library_desugaring(root: str, step: dict) -> int:
 
     # ② 依赖：必须在 dependencies 块里声明（AAR metadata 检查只看它）。
     if DESUGAR_DEP not in updated:
-        if re.search(r'\n\s*dependencies\s*\{', updated):
-            updated = re.sub(r'(\n\s*dependencies\s*\{\n)',
-                             r'\1' + dep_line + '\n', updated, count=1)
+        if re.search(r'(?m)^\s*dependencies\s*\{', updated):
+            updated = re.sub(r'(?m)^(\s*dependencies\s*\{)[ \t]*\n?',
+                             lambda match: match.group(1) + '\n' + dep_line + '\n',
+                             updated, count=1)
             print('  [注入] dependencies 块内补 desugar 依赖')
         else:
             # ★ Flutter 3.47.5 的 Kotlin DSL 模板**根本没有**顶层
@@ -479,6 +480,10 @@ def patch_core_library_desugaring(root: str, step: dict) -> int:
                 updated += '\n'
             updated += '\ndependencies {\n%s\n}\n' % dep_line
             print('  [注入] 新建 dependencies 块并声明 desugar 依赖')
+
+    if DESUGAR_DEP not in updated:
+        print('  [失败] desugar 依赖未成功注入：%s' % path)
+        return 1
 
     _write(path, updated)
     print('  [注入] %s → desugaring 已开启并声明依赖（%s）'

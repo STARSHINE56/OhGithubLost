@@ -91,6 +91,7 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   }
 
   Future<void> _detect() async {
+    if (!mounted) return;
     setState(() {
       _busy = true;
       _error = null;
@@ -124,6 +125,9 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
   }
 
   Future<void> _save({bool clear = false}) async {
+    if (!mounted || _busy) return;
+    final config = _config;
+    final key = clear ? null : _key.text;
     setState(() {
       _busy = true;
       _error = null;
@@ -133,12 +137,13 @@ class _AiSettingsPageState extends State<AiSettingsPage> {
         throw const AiException('detectFirst');
       }
       await widget.surface.aiSaveSettings(
-        _config,
-        key: clear ? null : _key.text,
+        config,
+        key: key,
         clearKey: clear,
       );
+      if (!mounted) return;
       _key.clear();
-      final saved = await widget.surface.aiHasKey(config: _config);
+      final saved = await widget.surface.aiHasKey(config: config);
       if (mounted) {
         setState(() => _savedKey = saved);
         ScaffoldMessenger.of(context)
