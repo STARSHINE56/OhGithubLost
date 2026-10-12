@@ -235,5 +235,7 @@ jobs:
           body_path: notes.md
           prerelease: ${{ inputs.channel != 'stable' }}
           draft: false
-          files: dist/*/*
+          files: |
+            dist/universal-APK/app-release.apk
+            dist/AAB/app-release.aab
           fail_on_unmatched_files: false
