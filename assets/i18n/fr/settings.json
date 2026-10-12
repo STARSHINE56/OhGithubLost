@@ -157,5 +157,9 @@
   "accelScopeActionArtifact": "Artefacts d’Action",
   "accelScopeRepoFile": "Fichiers du dépôt (téléchargement et aperçu)",
   "accelScopeReadmeImage": "Images dans le README",
-  "storageAllFilesGranted": "Accès à tous les fichiers accordé"
+  "storageAllFilesGranted": "Accès à tous les fichiers accordé",
+  "appearanceGroup": "Appearance",
+  "networkStorageGroup": "Network & Storage",
+  "accountGroup": "Account",
+  "aboutGroup": "About"
 }
