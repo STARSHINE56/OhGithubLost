@@ -318,12 +318,8 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     );
   }
-
-    return '${meta.join(' · ')} — $desc';
-  }
 }
 
-/// 分页仓库源。
 class _RepoPaged extends ChangeNotifier {
   _RepoPaged({required this.loader});
 
