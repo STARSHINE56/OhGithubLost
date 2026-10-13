@@ -37,6 +37,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: AiChatPage(surface: surface)));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Immediate message');
+    await tester.pump();
     await tester.tap(find.byIcon(Icons.arrow_upward));
     await tester.pump();
     expect(ai.started.isCompleted, isTrue);

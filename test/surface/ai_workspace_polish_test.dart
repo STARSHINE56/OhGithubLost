@@ -17,6 +17,7 @@ void main() {
     final send = find.widgetWithIcon(IconButton, Icons.arrow_upward);
     expect(tester.widget<IconButton>(send).onPressed, isNull);
     await tester.enterText(find.byType(TextField), 'First message');
+    await tester.pump();
     await tester.tap(send);
     await tester.pump();
     await tester.enterText(find.byType(TextField), 'Next draft');
