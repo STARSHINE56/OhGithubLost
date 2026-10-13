@@ -50,6 +50,9 @@ void main() {
     final service = AiService(store: InMemoryKv(), vault: InMemoryVault(),
       github: (method, path, body, query) async {
         calls.add(path);
+        if (query['page'] == '1') {
+          return List.generate(100, (i) => {'full_name': 'alice/repo$i', 'private': true});
+        }
         return [{'full_name': 'alice/example', 'private': true}];
       },
       provider: (config, endpoint, key, body) async {
@@ -63,7 +66,7 @@ void main() {
     await service.saveSettings(const AiSettings(enabled: true), key: 'AI-only');
     final chat = await service.newConversation();
     await service.send(chat, 'List my repositories', (_) async => false);
-    expect(calls, ['/user/repos']);
+    expect(calls, ['/user/repos', '/user/repos']);
     expect(chat.messages.last.content, 'alice/example');
   });
   test('credential gist filenames remain blocked', () {
