@@ -11,6 +11,33 @@ import 'package:ohgithublost/kernel/contract/ai_stream.dart';
 import 'package:ohgithublost/kernel/contract/disk_store.dart';
 
 void main() {
+  test('confirmed GitHub mutation is not falsely cancelled while in flight', () async {
+    final writeStarted = Completer<void>();
+    final writeDone = Completer<Object?>();
+    var turns = 0;
+    final ai = AiService(store: InMemoryKv(), vault: InMemoryVault(),
+      github: (method, path, body, query) {
+        expect(method, 'POST'); writeStarted.complete(); return writeDone.future;
+      }, provider: (_, endpoint, __, ___) async {
+        if (endpoint == 'models') return {'data': [{'id': 'model'}]};
+        return {'choices': [{'message': ++turns == 1 ? {
+          'role': 'assistant', 'content': '', 'tool_calls': [{'id': 'call',
+          'function': {'name': 'github_manage', 'arguments': jsonEncode({
+            'action': 'create_repository', 'body': {'name': 'repo'}})}}]
+        } : {'role': 'assistant', 'content': 'Created'}}]};
+      }, account: () async => 'alice');
+    await ai.saveSettings(const AiSettings(enabled: true), key: 'AI');
+    final chat = await ai.newConversation();
+    final sending = ai.send(chat, 'Create repo', (_) async => true);
+    await writeStarted.future;
+    expect(ai.canCancel, isFalse);
+    ai.cancelRequest();
+    writeDone.complete({'full_name': 'alice/repo'});
+    await sending;
+    expect(chat.messages.last.content, 'Created');
+    expect((await ai.audit()).any((e) => e['status'] == 'completed'), isTrue);
+  });
+
   for (final kind in ['openai', 'anthropic', 'gemini']) {
     test('streaming $kind keeps existing protocol conversion and auth separation', () async {
       final updates = <String>[];
