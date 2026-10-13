@@ -37,14 +37,14 @@ void main() {
     expect(tester.takeException(), isNull);
     if (Platform.environment['OGL_SCREENSHOTS'] == '1') {
       final boundary = capture.currentContext!.findRenderObject()! as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 2);
-      final data = await image.toByteData(format: ui.ImageByteFormat.png);
       await tester.runAsync(() async {
+        final image = await boundary.toImage(pixelRatio: 2);
+        final data = await image.toByteData(format: ui.ImageByteFormat.png);
         final file = File('build/ui_shots/settings__grouped.png');
         await file.parent.create(recursive: true);
         await file.writeAsBytes(data!.buffer.asUint8List());
+        image.dispose();
       });
-      image.dispose();
     }
     await tester.pumpWidget(const SizedBox.shrink());
   });
