@@ -1110,7 +1110,8 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
       'GitHub management using current token. Every operation needs user confirmation. Destructive operations can be irreversible and are not automatically rollbackable. Never invent body fields, scopes, or success.',
       {
         'action': {'type': 'string', 'enum': AiGithubTools.writes},
-        'repository': {'type': 'string'}, 'body': {'type': 'object'},
+        'repository': {'type': 'string', 'description': 'Explicit owner/repo or current conversation repository'},
+        'body': {'type': 'object', 'description': 'Action-specific fields: create_repository(name,description,private,auto_init); update_repository(description,homepage,private,archived,has_issues,has_projects,has_wiki); fork_repository(organization,name,default_branch_only); create_branch(branch,sha=40-char HEAD); releases(tag_name,target_commitish,name,body,draft,prerelease); issue_comment(body); merge_pull(sha=40-char PR HEAD,merge_method=merge/squash/rebase,commit_title,commit_message); gist(description,public,files={filename:{content}}); add_collaborator(permission=pull/triage/push/maintain/admin); label(name,color,description); milestone(title,state,description,due_on). No arbitrary fields.'},
         'number': {'type': 'integer'}, 'run_id': {'type': 'integer'},
         'gist_id': {'type': 'string'}, 'branch': {'type': 'string'},
         'username': {'type': 'string'}, 'name': {'type': 'string'},

@@ -37,11 +37,12 @@ void main() {
     addTearDown(tester.view.resetViewInsets);
     double? inset;
     await tester.pumpWidget(MaterialApp(builder: (_, child) => OgLKeyboardGuard(child: child!),
-      home: Scaffold(body: Builder(builder: (context) {
+      home: Builder(builder: (context) {
+        // Scaffold 消耗 inset 后会传 0 给 body；采样必须在 Scaffold 之上。
         inset = MediaQuery.viewInsetsOf(context).bottom;
-        return const Column(children: [Expanded(child: SizedBox()),
-          Padding(padding: EdgeInsets.all(16), child: TextField(key: ValueKey('input')))]);
-      }))));
+        return const Scaffold(body: Column(children: [Expanded(child: SizedBox()),
+          Padding(padding: EdgeInsets.all(16), child: TextField(key: ValueKey('input')))]));
+      })));
     await tester.tap(find.byType(TextField));
     await tester.pump();
     tester.view.viewInsets = FakeViewPadding(bottom: 300);
