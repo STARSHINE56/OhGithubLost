@@ -571,17 +571,25 @@ class _AiChatPageState extends State<AiChatPage> {
                   child: FilledButton.tonalIcon(onPressed: () => _bottom(force: true),
                     icon: const Icon(Icons.arrow_downward, size: 18), label: Text(aiText('latestMessages')))),
               if (_toolEvents.isNotEmpty)
-                ExpansionTile(title: Text(aiText('toolActivity')),
-                  subtitle: Text('${_toolEvents.length}'),
+                Padding(padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                  child: Card(elevation: 0, margin: EdgeInsets.zero,
+                    clipBehavior: Clip.antiAlias,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    child: ExpansionTile(
+                  leading: const Icon(Icons.build_circle_outlined, size: 20),
+                  title: Text(aiText('toolActivity'), style: Theme.of(context).textTheme.titleSmall),
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text('${_toolEvents.length}', style: Theme.of(context).textTheme.labelMedium),
+                    const SizedBox(width: 8), const Icon(Icons.expand_more, size: 20)]),
                   children: [SizedBox(height: MediaQuery.sizeOf(context).height * .20,
                     child: ListView(children: [for (final event in _toolEvents)
                     ListTile(dense: true,
                       leading: Icon(event['status'] == 'completed' ? Icons.check_circle_outline : event['status'] == 'failed' ? Icons.error_outline : Icons.pending_outlined),
                       title: Text(event['name'] ?? ''),
-                      subtitle: Text('${event['repo'] ?? ''} · ${aiText('tool_${event['status']}')}'))]))]),
+                      subtitle: Text('${event['repo'] ?? ''} · ${aiText('tool_${event['status']}')}'))]))]))),
               if (_sending)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.fromLTRB(20, 8, 16, 0),
                   child: Row(
                     children: [
                       const SizedBox(
@@ -603,7 +611,9 @@ class _AiChatPageState extends State<AiChatPage> {
               if (_error != null)
                 ListTile(
                   leading: const Icon(Icons.error_outline),
-                  title: Text(_error!),
+                  title: Text(_error!, maxLines: 3, overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.error)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20),
                   trailing: IconButton(
                     tooltip: aiText('settings'),
                     icon: const Icon(Icons.tune),
@@ -616,7 +626,7 @@ class _AiChatPageState extends State<AiChatPage> {
                   ),
                 ),
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -644,11 +654,13 @@ class _AiChatPageState extends State<AiChatPage> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    IconButton.filled(
+                    SizedBox(width: 52, height: 52,
+                      child: IconButton.filled(
+                      style: IconButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
                       tooltip: aiText('send'),
                       onPressed: _sending || _loading || _chat == null || _input.text.trim().isEmpty ? null : _send,
                       icon: const Icon(Icons.arrow_upward),
-                    ),
+                    )),
                   ],
                 ),
               ),
