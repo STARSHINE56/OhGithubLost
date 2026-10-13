@@ -104,7 +104,7 @@ abstract final class AiGithubTools {
       if (data['name'] is! String || !RegExp(r'^[A-Za-z0-9_.-]+$').hasMatch(data['name'] as String)) throw const AiException('invalidProposal');
       return AiGithubPlan('POST', '/user/repos', body: data);
     }
-    if (action == 'mark_all_notifications_read') return AiGithubPlan('PUT', '/notifications', body: {'read': true, 'last_read_at': DateTime.now().toUtc().toIso8601String().split('.').first + 'Z'});
+    if (action == 'mark_all_notifications_read') return AiGithubPlan('PUT', '/notifications', body: {'read': true, 'last_read_at': '${DateTime.now().toUtc().toIso8601String().split('.').first}Z'});
     if (action == 'mark_notification_read') return AiGithubPlan('PATCH', '/notifications/threads/${_id(args, 'number')}', body: {});
     if (action.endsWith('_gist')) {
       if (action != 'delete_gist') {
