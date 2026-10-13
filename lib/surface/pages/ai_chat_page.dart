@@ -65,6 +65,7 @@ class _AiChatPageState extends State<AiChatPage> {
   }
 
   void _accountChanged() {
+    if (_sending) widget.surface.aiCancelRequest();
     if (mounted) {
       Navigator.of(context).popUntil((route) => route.isFirst);
     }
@@ -72,6 +73,7 @@ class _AiChatPageState extends State<AiChatPage> {
 
   @override
   void dispose() {
+    if (_sending) widget.surface.aiCancelRequest();
     widget.surface.aiBuildChanges.removeListener(_reload);
     widget.surface.domain.auth.removeListener(_accountChanged);
     _input.removeListener(_inputChanged);
@@ -571,11 +573,12 @@ class _AiChatPageState extends State<AiChatPage> {
               if (_toolEvents.isNotEmpty)
                 ExpansionTile(title: Text(aiText('toolActivity')),
                   subtitle: Text('${_toolEvents.length}'),
-                  children: [for (final event in _toolEvents)
+                  children: [SizedBox(height: MediaQuery.sizeOf(context).height * .20,
+                    child: ListView(children: [for (final event in _toolEvents)
                     ListTile(dense: true,
                       leading: Icon(event['status'] == 'completed' ? Icons.check_circle_outline : event['status'] == 'failed' ? Icons.error_outline : Icons.pending_outlined),
                       title: Text(event['name'] ?? ''),
-                      subtitle: Text('${event['repo'] ?? ''} · ${aiText('tool_${event['status']}')}'))]),
+                      subtitle: Text('${event['repo'] ?? ''} · ${aiText('tool_${event['status']}')}'))]))]),
               if (_sending)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),

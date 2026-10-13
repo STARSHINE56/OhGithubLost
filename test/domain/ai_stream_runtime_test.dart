@@ -7,9 +7,41 @@ import 'package:ohgithublost/domain/ai/ai_context_budget.dart';
 import 'package:ohgithublost/domain/ai/ai_models.dart';
 import 'package:ohgithublost/domain/ai/ai_service.dart';
 import 'package:ohgithublost/domain/ai/ai_stream_provider.dart';
+import 'package:ohgithublost/kernel/contract/ai_stream.dart';
 import 'package:ohgithublost/kernel/contract/disk_store.dart';
 
 void main() {
+  for (final kind in ['openai', 'anthropic', 'gemini']) {
+    test('streaming $kind keeps existing protocol conversion and auth separation', () async {
+      final updates = <String>[];
+      final provider = AiStreamProvider((_, __, ___) async => throw StateError('unexpected plain request'),
+        (url, headers, body, cancellation, event) async {
+          if (kind == 'gemini') {
+            expect(url, endsWith(':streamGenerateContent?alt=sse'));
+            expect(headers['x-goog-api-key'], 'AI-only');
+            event({'candidates': [{'content': {'parts': [{'text': 'Hello'}]}, 'finishReason': 'STOP'}]});
+          } else if (kind == 'anthropic') {
+            expect(url, endsWith('/messages'));
+            expect(headers['x-api-key'], 'AI-only');
+            expect(body['stream'], isTrue);
+            event({'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': ''}});
+            event({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': 'Hello'}});
+            event({'type': 'message_delta', 'delta': {'stop_reason': 'end_turn'}});
+            event({'type': 'message_stop'});
+          } else {
+            expect(url, endsWith('/chat/completions'));
+            expect(headers['authorization'], 'Bearer AI-only');
+            expect(body['stream'], isTrue);
+            event({'choices': [{'delta': {'content': 'Hello'}, 'finish_reason': 'stop'}]});
+          }
+        });
+      final result = await provider.request(AiSettings(kind: kind, baseUrl: 'https://example.com/v1'),
+        'chat/completions', 'AI-only', {'model': 'model', 'messages': [{'role': 'user', 'content': 'hello'}],
+          'tools': [], 'max_tokens': 8192}, AiCancellation(), updates.add);
+      expect((result['choices'] as List).single['message']['content'], 'Hello');
+      expect(updates.last, 'Hello');
+    });
+  }
   test('SSE handles byte-split UTF8, CRLF, comments and done', () async {
     final raw = utf8.encode(': heartbeat\r\ndata: {"text":"你好"}\r\n\r\ndata: [DONE]\n\n');
     final events = await decodeAiSse(Stream.fromIterable(raw.map((v) => [v]))).toList();
