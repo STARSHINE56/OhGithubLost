@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import '../../kernel/contract/disk_store.dart';
 import 'ai_conversation_store.dart';
+import 'ai_github_tools.dart';
 import 'ai_models.dart';
 import 'ai_provider.dart';
 
@@ -407,6 +408,22 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
       await switchRepo(chat, args['repository'] as String);
       return {'repository': chat.repo, 'branch': chat.branch};
     }
+    if (name == 'github_read' || name == 'github_manage') {
+      final repository = args['repository'] as String? ?? chat.repo;
+      if (name == 'github_read') {
+        final plan = AiGithubTools.read(args, repository);
+        final result = await github(plan.method, plan.path, plan.body, plan.query);
+        // 分页工具显式返回当前页信息，禁止把一页当作所有仓库。
+        return {'data': result, 'page': plan.query['page'],
+          'per_page': plan.query['per_page'],
+          'possibly_more': result is List && result.length == 100};
+      }
+      AiGithubTools.write(args, repository); // 先本地校验，再展示确认。
+      return executeProposal(AiProposal(
+        operation: 'github_manage', accountId: chat.accountId,
+        repo: repository, branch: chat.branch, conversationId: chat.id,
+        payload: Map<String, Object?>.from(args)), confirm);
+    }
     validateRepo(chat.repo);
     if (chat.branch.isEmpty) {
       await switchRepo(chat, chat.repo);
@@ -665,7 +682,11 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
   ) async {
     await _checkAccount(proposal.accountId);
     final github = _githubFor(proposal.accountId);
-    validateRepo(proposal.repo);
+    if (proposal.operation == 'github_manage') {
+      AiGithubTools.write(Map<String, dynamic>.from(jsonDecode(proposal.payloadJson) as Map), proposal.repo);
+    } else {
+      validateRepo(proposal.repo);
+    }
     if (!await confirm(proposal)) {
       await _record(proposal.accountId, {
         'operation': proposal.operation,
@@ -689,6 +710,15 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
       'files': proposal.files.map((e) => e.toJson()).toList(),
     });
     switch (proposal.operation) {
+      case 'github_manage':
+        final plan = AiGithubTools.write(args, proposal.repo);
+        final result = await github(plan.method, plan.path, plan.body, plan.query);
+        await _record(proposal.accountId, {
+          'operation': 'github_manage', 'action': args['action'],
+          'repo': proposal.repo, 'status': 'completed',
+        });
+        // 通用管理操作不伪造回滚，删除/合并等可能不可逆，确认页明确提醒。
+        return {'completed': true, 'action': args['action'], 'result': result};
       case 'propose_files':
         final entries = proposal.files
             .map(
@@ -1066,8 +1096,25 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
     return completed;
   }
 
-  /// 不向模型暴露任意 HTTP、shell、强推、删仓库、合并 PR 或 Secrets 能力。
+  /// 不暴露任意 HTTP、shell、强推和 Secrets；所有写操作必须本地确认。
   static final List<Map<String, Object?>> _tools = [
+    _schema('github_read',
+      'Read GitHub account or repository data. No repository needed for my_repositories/current_user/notifications/gists/orgs. Enumerate repositories page by page (100/page); never claim one page is all. Effective access depends on current token and GitHub authorization.',
+      {
+        'action': {'type': 'string', 'enum': AiGithubTools.reads},
+        'repository': {'type': 'string', 'description': 'owner/repo; optional for account reads'},
+        'page': {'type': 'integer'}, 'query': {'type': 'string'},
+        'number': {'type': 'integer'}, 'run_id': {'type': 'integer'},
+      }, ['action']),
+    _schema('github_manage',
+      'GitHub management using current token. Every operation needs user confirmation. Destructive operations can be irreversible and are not automatically rollbackable. Never invent body fields, scopes, or success.',
+      {
+        'action': {'type': 'string', 'enum': AiGithubTools.writes},
+        'repository': {'type': 'string'}, 'body': {'type': 'object'},
+        'number': {'type': 'integer'}, 'run_id': {'type': 'integer'},
+        'gist_id': {'type': 'string'}, 'branch': {'type': 'string'},
+        'username': {'type': 'string'}, 'name': {'type': 'string'},
+      }, ['action']),
     _schema(
       'switch_repository',
       'Switch context to an owner/name or unique repository name.',

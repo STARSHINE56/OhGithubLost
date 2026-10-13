@@ -541,7 +541,9 @@ class _OgLClientShellState extends State<OgLClientShell>
         key: _scaffoldKey,
         drawer: _drawer(),
         body: body,
-        bottomNavigationBar: NavigationBar(
+        bottomNavigationBar: MediaQuery.viewInsetsOf(context).bottom > 0
+            ? null
+            : NavigationBar(
           selectedIndex: navigationIndex,
           onDestinationSelected: (int value) => _select(tabs[value]),
           destinations: <NavigationDestination>[

@@ -245,6 +245,7 @@ class _AiChatPageState extends State<AiChatPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
+    resizeToAvoidBottomInset: true,
     appBar: AppBar(
       title: Text(aiText('title')),
       actions: [

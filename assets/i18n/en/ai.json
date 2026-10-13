@@ -115,5 +115,7 @@
   "watchFailed": "Repository checks failed; will retry",
   "cancelled": "Operation cancelled; proposal not executed",
   "markAllRead": "Mark all as read",
-  "markAllReadSubmitted": "Request submitted. Refreshing; GitHub may process it in the background."
+  "markAllReadSubmitted": "Request submitted. Refreshing; GitHub may process it in the background.",
+  "github_manage": "GitHub management",
+  "managementWarning": "This may change permissions, publish, merge or delete data. Some actions cannot be undone. Check the account, target and full parameters. Cancel performs no write."
 }

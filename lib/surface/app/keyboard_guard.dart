@@ -73,7 +73,8 @@ class _OgLKeyboardGuardState extends State<OgLKeyboardGuard>
       return false;
     }
     final BuildContext? context = focus.context;
-    if (context?.widget is EditableText) {
+    if (context?.widget is EditableText ||
+        context?.findAncestorWidgetOfExactType<EditableText>() != null) {
       return true;
     }
     final String? label = focus.debugLabel;

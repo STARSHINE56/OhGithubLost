@@ -115,5 +115,7 @@
   "watchFailed": "Vérification échouée ; nouvel essai prévu",
   "cancelled": "Action annulée ; proposition non exécutée",
   "markAllRead": "Tout marquer comme lu",
-  "markAllReadSubmitted": "Demande envoyée. GitHub peut la traiter en arrière-plan."
+  "markAllReadSubmitted": "Demande envoyée. GitHub peut la traiter en arrière-plan.",
+  "github_manage": "Gestion GitHub",
+  "managementWarning": "Cette action peut modifier les autorisations, publier, fusionner ou supprimer des données. Certaines actions sont irréversibles. Vérifiez le compte, la cible et les paramètres. Annuler ne modifie rien."
 }

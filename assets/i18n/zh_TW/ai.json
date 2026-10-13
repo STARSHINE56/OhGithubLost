@@ -115,5 +115,7 @@
   "watchFailed": "倉庫更新檢查失敗，下次重試",
   "cancelled": "操作已取消，未執行本次提案",
   "markAllRead": "全部已讀",
-  "markAllReadSubmitted": "已提交全部已讀。清單會重新整理，GitHub 背景處理可能稍有延遲。"
+  "markAllReadSubmitted": "已提交全部已讀。清單會重新整理，GitHub 背景處理可能稍有延遲。",
+  "github_manage": "GitHub 管理操作",
+  "managementWarning": "此操作可能修改權限、公開內容、合併或刪除資料，部分操作無法撤銷。請核對帳號、目標與完整參數；取消不會執行。"
 }

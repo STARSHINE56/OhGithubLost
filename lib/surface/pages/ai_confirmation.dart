@@ -26,6 +26,8 @@ Future<bool> confirmAiProposal(
                 Text('${proposal.repo} · ${proposal.branch}'),
                 const SizedBox(height: 8),
                 Text(aiText(proposal.operation)),
+                if (proposal.operation == 'github_manage')
+                  Text(aiText('managementWarning'), style: TextStyle(color: Theme.of(context).colorScheme.error)),
                 const SizedBox(height: 8),
                 SelectableText(proposal.payloadJson),
                 if (proposal.baseSha.isNotEmpty)

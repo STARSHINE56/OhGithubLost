@@ -115,5 +115,7 @@
   "watchFailed": "Update-Prüfung fehlgeschlagen; erneuter Versuch folgt",
   "cancelled": "Aktion abgebrochen; Vorschlag nicht ausgeführt",
   "markAllRead": "Alle als gelesen markieren",
-  "markAllReadSubmitted": "Anfrage gesendet. GitHub verarbeitet sie eventuell im Hintergrund."
+  "markAllReadSubmitted": "Anfrage gesendet. GitHub verarbeitet sie eventuell im Hintergrund.",
+  "github_manage": "GitHub-Verwaltung",
+  "managementWarning": "Diese Aktion kann Berechtigungen ändern, Daten veröffentlichen, zusammenführen oder löschen. Manche Aktionen sind unwiderruflich. Konto, Ziel und Parameter prüfen. Abbrechen schreibt nichts."
 }
