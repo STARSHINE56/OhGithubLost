@@ -141,6 +141,7 @@ jobs:
           flutter create --platforms=android --org com.yingo --project-name ohgithublost .
           rm -f test/widget_test.dart
           python3 tool/inject_platform_spec.py --target android || exit 1
+          python3 tool/android_arm64.py
           flutter pub get
 
       - name: 核验正式引导清单与 Fork 信任根
@@ -166,6 +167,9 @@ jobs:
           --build-name="$BUILD_NAME"
           --build-number="$BUILD_NUMBER"
           --dart-define-from-file=dart_define.json
+
+      - name: 核验 APK 仅含 ARM64 原生库
+        run: python3 tool/android_arm64.py "${{ matrix.artifact }}"
 
       - name: apksigner 核验固定签名、包名及版本号
         if: matrix.build == 'apk'
