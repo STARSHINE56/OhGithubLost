@@ -77,6 +77,21 @@ class _OgLKeyboardGuardState extends State<OgLKeyboardGuard>
         context?.findAncestorWidgetOfExactType<EditableText>() != null) {
       return true;
     }
+    // TextField 的 FocusNode 上下文可能挂在 EditableText 外侧的 Focus。
+    // 在该焦点子树内找真正 hasFocus 的 EditableText，不依赖 debugLabel。
+    var editableFocused = false;
+    if (context is Element) {
+      void visit(Element element) {
+        final widget = element.widget;
+        if (widget is EditableText && widget.focusNode.hasFocus) {
+          editableFocused = true;
+          return;
+        }
+        if (!editableFocused) element.visitChildren(visit);
+      }
+      visit(context);
+    }
+    if (editableFocused) return true;
     final String? label = focus.debugLabel;
     if (label != null && label.contains('CodeEditor')) {
       return true;
