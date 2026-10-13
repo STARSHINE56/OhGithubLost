@@ -64,14 +64,18 @@ class AiHttpTransport {
   Future<Map<String, dynamic>> send(
     String url,
     Map<String, String> headers,
-    Map<String, Object?>? body,
-  ) async {
+    Map<String, Object?>? body, {
+    AiCancellation? cancellation,
+  }) async {
     final uri = Uri.parse(url);
     if (uri.scheme != 'https' || uri.userInfo.isNotEmpty || uri.host.isEmpty) {
       throw const FormatException('HTTPS API endpoint required');
     }
+    cancellation?.check();
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 20);
+    void abort() => client.close(force: true);
+    cancellation?.add(abort);
     try {
       return await (() async {
         final request = await client.openUrl(
@@ -98,7 +102,11 @@ class AiHttpTransport {
         }
         return Map<String, dynamic>.from(jsonDecode(utf8.decode(bytes)) as Map);
       })().timeout(const Duration(seconds: 180));
+    } catch (_) {
+      if (cancellation?.isCancelled == true) throw const AiRequestCancelled();
+      rethrow;
     } finally {
+      cancellation?.remove(abort);
       client.close(force: true);
     }
   }

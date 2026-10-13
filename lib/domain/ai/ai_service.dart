@@ -21,6 +21,7 @@ class AiService {
     required this.account,
     this.accountGithub,
     this.streamProvider,
+    this.cancelProvider,
   }) : _store = store,
        _vault = vault,
        _chats = AiConversationStore(vault);
@@ -31,6 +32,8 @@ class AiService {
   final AiProviderRequest provider;
   final Future<Map<String, dynamic>> Function(AiSettings, String, String,
     Map<String, Object?>, AiCancellation, void Function(String))? streamProvider;
+  final Future<Map<String, dynamic>> Function(AiSettings, String, String,
+    Map<String, Object?>?, AiCancellation)? cancelProvider;
   AiCancellation? _activeCancellation;
   bool _writeInFlight = false;
   bool get canCancel => _busy && !_writeInFlight;
@@ -132,6 +135,7 @@ class AiService {
     String? key,
     AiSettings? config,
     bool refresh = true,
+    AiCancellation? cancellation,
   }) async {
     final value = config ?? await settings();
     final secret = key?.trim().isNotEmpty == true
@@ -148,7 +152,12 @@ class AiService {
         DateTime.now().difference(at) < const Duration(minutes: 5)) {
       return List<String>.of(_modelCache);
     }
-    final response = await provider(value, 'models', secret, null);
+    final cancellable = cancelProvider;
+    cancellation?.check();
+    final response = cancellation != null && cancellable != null
+      ? await cancellable(value, 'models', secret, null, cancellation)
+      : await provider(value, 'models', secret, null);
+    cancellation?.check();
     final models =
         (response['data'] as List? ?? [])
             .whereType<Map>()
@@ -304,6 +313,7 @@ class AiService {
       try { onProgress?.call(state); } catch (_) {}
     }
     Future<bool> confirmation(AiProposal proposal) async {
+      if (cancellation.isCancelled) return false;
       progress('awaitingConfirmation');
       final accepted = await confirm(proposal);
       if (cancellation.isCancelled) return false;
@@ -327,14 +337,15 @@ class AiService {
       if (key == null || key.isEmpty) {
         throw const AiException('keyRequired');
       }
-      var models = await detectModels(config: config, key: key, refresh: false);
+      var models = await detectModels(config: config, key: key, refresh: false, cancellation: cancellation);
       final model = config.model.isEmpty ? models.first : config.model;
       if (!models.contains(model)) {
-        models = await detectModels(config: config, key: key);
+        models = await detectModels(config: config, key: key, cancellation: cancellation);
       }
       if (!models.contains(model)) {
         throw const AiException('modelUnavailable');
       }
+      cancellation.check();
       // 在本地识别明确的仓库切换命令；只给仓库短名时搜索并要求唯一匹配。
       final command = RegExp(
         r'^(?:\u5207\u5230|\u5207\u6362\u5230|switch to)\s+(.+?)(?:\s*\u4ED3\u5E93)?$',

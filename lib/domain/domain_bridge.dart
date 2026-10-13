@@ -470,6 +470,9 @@ class DomainLayerModule extends OgLModule {
         accountGithub: notificationGithub,
         provider: provider.request,
         streamProvider: streaming.request,
+        cancelProvider: (config, endpoint, key, body, cancellation) => AiProvider(
+          (url, headers, payload) => transport.send(url, headers, payload, cancellation: cancellation)
+        ).request(config, endpoint, key, body),
         account: ghAuth.activeAccountId,
       ),
       productivity: ProductivityService(
