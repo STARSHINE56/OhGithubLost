@@ -456,8 +456,10 @@ class _AiChatPageState extends State<AiChatPage> {
                                         icon: const Icon(Icons.copy_outlined, size: 16),
                                         onPressed: () async {
                                           await Clipboard.setData(ClipboardData(text: message.notice ? aiText(message.content) : message.content));
-                                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text(aiText('messageCopied'))));
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text(aiText('messageCopied'))));
+                                          }
                                         }),
                                     ]),
                                     const SizedBox(height: 8),
