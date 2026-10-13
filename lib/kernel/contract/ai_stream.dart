@@ -1,6 +1,15 @@
 /// 可取消 AI 网络契约；不取消已经送出的 GitHub 写操作。
 library;
 
+/// 只携带可本地化类别和 HTTP 状态码，绝不携带响应正文或凭据。
+class AiTransportFailure implements Exception {
+  const AiTransportFailure(this.code, {this.statusCode});
+  final String code;
+  final int? statusCode;
+  @override
+  String toString() => 'AiTransportFailure($code${statusCode == null ? '' : ', HTTP $statusCode'})';
+}
+
 class AiRequestCancelled implements Exception {
   const AiRequestCancelled();
 }

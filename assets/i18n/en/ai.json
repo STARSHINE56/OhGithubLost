@@ -146,5 +146,11 @@
   "tool_cancelled": "Cancelled",
   "copyCode": "Copy code",
   "retryResponse": "Retry response only (no tools)",
-  "loadEarlierMessages": "Load earlier messages"
+  "loadEarlierMessages": "Load earlier messages",
+  "aiHttpFailure": "AI service rejected the request; check settings, quota or parameters using the HTTP status",
+  "aiTimeout": "AI request timed out; check the service or network",
+  "aiTlsFailure": "AI TLS connection failed; check certificate and endpoint",
+  "aiNetworkFailure": "Cannot connect to AI service; check network and DNS",
+  "aiMalformedResponse": "Invalid AI response or tool argument format; the call was not executed",
+  "aiResponseTooLarge": "AI response exceeds the safety size limit; reduce the task"
 }

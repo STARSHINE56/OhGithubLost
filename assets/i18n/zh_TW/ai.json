@@ -146,5 +146,11 @@
   "tool_cancelled": "已取消",
   "copyCode": "複製程式碼",
   "retryResponse": "重試純回覆（不執行工具）",
-  "loadEarlierMessages": "載入較早訊息"
+  "loadEarlierMessages": "載入較早訊息",
+  "aiHttpFailure": "AI 服務拒絕請求，請依 HTTP 狀態檢查服務設定、額度或參數",
+  "aiTimeout": "AI 請求逾時，請檢查服務回應或網路",
+  "aiTlsFailure": "AI 服務 TLS 連線失敗，請檢查憑證與服務網址",
+  "aiNetworkFailure": "無法連線 AI 服務，請檢查網路與網域解析",
+  "aiMalformedResponse": "AI 回應或工具參數格式無效，未執行該呼叫",
+  "aiResponseTooLarge": "AI 回應超過安全大小限制，請縮小任務"
 }

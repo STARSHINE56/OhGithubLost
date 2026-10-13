@@ -146,5 +146,11 @@
   "tool_cancelled": "Annulé",
   "copyCode": "Copier le code",
   "retryResponse": "Réessayer la réponse seule (sans outils)",
-  "loadEarlierMessages": "Charger les messages précédents"
+  "loadEarlierMessages": "Charger les messages précédents",
+  "aiHttpFailure": "Le service IA a refusé la requête ; vérifiez paramètres et quota selon le statut HTTP",
+  "aiTimeout": "Requête IA expirée ; vérifiez service et réseau",
+  "aiTlsFailure": "Connexion TLS IA échouée ; vérifiez certificat et adresse",
+  "aiNetworkFailure": "Service IA inaccessible ; vérifiez réseau et DNS",
+  "aiMalformedResponse": "Réponse IA ou arguments d’outil invalides ; appel non exécuté",
+  "aiResponseTooLarge": "Réponse IA trop volumineuse ; réduisez la tâche"
 }

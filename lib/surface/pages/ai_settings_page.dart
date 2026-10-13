@@ -11,8 +11,15 @@ String aiText(String key, [Map<String, String>? args]) =>
     OgLI18n.instance.t('ai', key, args: args);
 
 /// 公共错误入口只显示业务键或通用错误，不输出密钥/响应原文。
-String aiError(Object error) =>
-    aiText(error is AiException ? error.code : 'requestFailed');
+String aiError(Object error) {
+  if (error is AiTransportFailure) {
+    if (error.statusCode != null) {
+      return '${aiText('aiHttpFailure')} (HTTP ${error.statusCode})';
+    }
+    return aiText(error.code);
+  }
+  return aiText(error is AiException ? error.code : 'requestFailed');
+}
 
 class AiSettingsPage extends StatefulWidget {
   const AiSettingsPage({required this.surface, super.key});

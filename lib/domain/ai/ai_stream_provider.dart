@@ -23,7 +23,12 @@ class AiStreamProvider {
       await stream(target, headers, {...payload,
         if (settings.kind != 'gemini') 'stream': true}, cancellation, merger.add);
       cancellation.check();
-      return merger.finish();
+      try {
+        return merger.finish();
+      } on FormatException {
+        // 工具 arguments 不合法也是响应格式问题，不是用户密钥错误。
+        throw const AiException('aiMalformedResponse');
+      }
     });
     return provider.request(settings, endpoint, key, body);
   }

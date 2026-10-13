@@ -32,13 +32,13 @@ class AiHttpTransport {
         request.add(utf8.encode(jsonEncode(body)));
         final response = await request.close();
         if (response.statusCode < 200 || response.statusCode >= 300) {
-          throw HttpException('AI HTTP ${response.statusCode}');
+          throw AiTransportFailure('aiHttpFailure', statusCode: response.statusCode);
         }
         var size = 0;
         final bounded = response.map((chunk) {
           size += chunk.length;
           cancellation.check();
-          if (size > 4000000) throw const FormatException('AI response too large');
+          if (size > 4000000) throw const AiTransportFailure('aiResponseTooLarge');
           return chunk;
         });
         if (response.headers.contentType?.mimeType == 'application/json') {
@@ -52,8 +52,12 @@ class AiHttpTransport {
         }
       })().timeout(const Duration(seconds: 180));
       cancellation.check();
-    } catch (_) {
+    } catch (error) {
       if (cancellation.isCancelled) throw const AiRequestCancelled();
+      if (error is TimeoutException) throw const AiTransportFailure('aiTimeout');
+      if (error is HandshakeException) throw const AiTransportFailure('aiTlsFailure');
+      if (error is SocketException) throw const AiTransportFailure('aiNetworkFailure');
+      if (error is FormatException) throw const AiTransportFailure('aiMalformedResponse');
       rethrow;
     } finally {
       cancellation.remove(abort);
@@ -91,19 +95,23 @@ class AiHttpTransport {
         }
         final response = await request.close();
         if (response.statusCode < 200 || response.statusCode >= 300) {
-          throw HttpException('AI HTTP ${response.statusCode}');
+          throw AiTransportFailure('aiHttpFailure', statusCode: response.statusCode);
         }
         final bytes = <int>[];
         await for (final chunk in response) {
           bytes.addAll(chunk);
           if (bytes.length > 4000000) {
-            throw const FormatException('AI response too large');
+            throw const AiTransportFailure('aiResponseTooLarge');
           }
         }
         return Map<String, dynamic>.from(jsonDecode(utf8.decode(bytes)) as Map);
       })().timeout(const Duration(seconds: 180));
-    } catch (_) {
+    } catch (error) {
       if (cancellation?.isCancelled == true) throw const AiRequestCancelled();
+      if (error is TimeoutException) throw const AiTransportFailure('aiTimeout');
+      if (error is HandshakeException) throw const AiTransportFailure('aiTlsFailure');
+      if (error is SocketException) throw const AiTransportFailure('aiNetworkFailure');
+      if (error is FormatException) throw const AiTransportFailure('aiMalformedResponse');
       rethrow;
     } finally {
       cancellation?.remove(abort);

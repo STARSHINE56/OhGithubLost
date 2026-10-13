@@ -146,5 +146,11 @@
   "tool_cancelled": "Abgebrochen",
   "copyCode": "Code kopieren",
   "retryResponse": "Nur Antwort wiederholen (ohne Werkzeuge)",
-  "loadEarlierMessages": "Ältere Nachrichten laden"
+  "loadEarlierMessages": "Ältere Nachrichten laden",
+  "aiHttpFailure": "KI-Dienst hat die Anfrage abgelehnt; Einstellungen, Kontingent oder Parameter anhand des HTTP-Status prüfen",
+  "aiTimeout": "KI-Anfrage abgelaufen; Dienst oder Netzwerk prüfen",
+  "aiTlsFailure": "KI-TLS-Verbindung fehlgeschlagen; Zertifikat und Endpunkt prüfen",
+  "aiNetworkFailure": "KI-Dienst nicht erreichbar; Netzwerk und DNS prüfen",
+  "aiMalformedResponse": "Ungültiges KI-Antwort- oder Werkzeugparameterformat; Aufruf nicht ausgeführt",
+  "aiResponseTooLarge": "KI-Antwort überschreitet das Größenlimit; Aufgabe verkleinern"
 }

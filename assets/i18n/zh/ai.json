@@ -146,5 +146,11 @@
   "tool_cancelled": "已取消",
   "copyCode": "复制代码",
   "retryResponse": "重试纯回复（不执行工具）",
-  "loadEarlierMessages": "加载更早消息"
+  "loadEarlierMessages": "加载更早消息",
+  "aiHttpFailure": "AI 服务拒绝请求，请根据 HTTP 状态检查服务设置、配额或参数",
+  "aiTimeout": "AI 请求超时，请检查服务响应或网络",
+  "aiTlsFailure": "AI 服务 TLS 连接失败，请检查证书和服务地址",
+  "aiNetworkFailure": "无法连接 AI 服务，请检查网络与域名解析",
+  "aiMalformedResponse": "AI 服务返回的响应或工具参数格式不合法，未执行该调用",
+  "aiResponseTooLarge": "AI 响应超过安全大小上限，请缩小任务"
 }
