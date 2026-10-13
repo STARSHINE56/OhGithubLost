@@ -176,6 +176,20 @@ class AiService {
     return chats;
   }
 
+  Future<List<AiConversation>> conversationSummaries() async {
+    final id = await _account();
+    final list = await _chats.summaries(id);
+    await _checkAccount(id);
+    return list;
+  }
+
+  Future<AiConversation> loadConversation(String chatId) async {
+    final id = await _account();
+    final chat = await _chats.load(id, chatId);
+    await _checkAccount(id);
+    return chat;
+  }
+
   Future<AiConversation> newConversation({
     String repo = '',
     String branch = '',
@@ -238,7 +252,9 @@ class AiService {
     if (_busy || _polling) throw const AiException('busy');
     final normalized = title.trim();
     if (normalized.length > 120 || normalized.contains(RegExp(r'[\x00-\x1f]'))) throw const AiException('invalidProposal');
-    final updated = AiConversation.fromJson(Map<String, dynamic>.from(chat.toJson()))..title = normalized;
+    await _checkAccount(chat.accountId);
+    final updated = await _chats.load(chat.accountId, chat.id);
+    updated.title = normalized;
     await saveConversation(updated);
     chat.title = normalized;
   }

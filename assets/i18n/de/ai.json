@@ -145,5 +145,6 @@
   "tool_failed": "Fehlgeschlagen",
   "tool_cancelled": "Abgebrochen",
   "copyCode": "Code kopieren",
-  "retryResponse": "Nur Antwort wiederholen (ohne Werkzeuge)"
+  "retryResponse": "Nur Antwort wiederholen (ohne Werkzeuge)",
+  "loadEarlierMessages": "Ältere Nachrichten laden"
 }

@@ -41,6 +41,7 @@ class _AiChatPageState extends State<AiChatPage> {
   final _toolEvents = <Map<String, String>>[];
   bool _toolAttempted = false;
   String? _retryText;
+  int _messageWindow = 40;
   String _sendStatus = 'preparingRequest';
   int _loadGeneration = 0;
   bool _followLatest = true;
@@ -90,7 +91,7 @@ class _AiChatPageState extends State<AiChatPage> {
   Future<void> _load({bool keep = false, bool fresh = false}) async {
     final generation = ++_loadGeneration;
     try {
-      final list = await widget.surface.aiConversations();
+      final list = await widget.surface.aiConversationSummaries();
       if (!mounted || generation != _loadGeneration) return;
       AiConversation? chat;
       if (keep) {
@@ -106,6 +107,7 @@ class _AiChatPageState extends State<AiChatPage> {
             )
             .firstOrNull;
       }
+      if (chat != null) chat = await widget.surface.aiLoadConversation(chat.id);
       chat ??= await widget.surface.aiNewChat(
         repo: widget.repo,
         branch: widget.branch,
@@ -203,7 +205,7 @@ class _AiChatPageState extends State<AiChatPage> {
         },
       );
       await request;
-      _history = await widget.surface.aiConversations();
+      _history = await widget.surface.aiConversationSummaries();
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -349,7 +351,9 @@ class _AiChatPageState extends State<AiChatPage> {
 
   @override
   Widget build(BuildContext context) {
-    final visibleMessages = _visibleMessages;
+    final allMessages = _visibleMessages;
+    final start = (allMessages.length - _messageWindow).clamp(0, allMessages.length);
+    final visibleMessages = allMessages.sublist(start);
     final history = _history.where((chat) =>
       ('${chat.title} ${chat.repo} ${chat.messages.isEmpty ? '' : chat.messages.first.content}')
         .toLowerCase().contains(_historyFilter.toLowerCase())).toList();
@@ -410,13 +414,19 @@ class _AiChatPageState extends State<AiChatPage> {
                     ),
                     onTap: _sending
                         ? null
-                        : () {
-                            setState(() {
-                              _chat = chat;
-                              _error = null;
-                            });
+                        : () async {
                             Navigator.pop(context);
-                            _bottom();
+                            final generation = ++_loadGeneration;
+                            setState(() => _loading = true);
+                            try {
+                              final loaded = await widget.surface.aiLoadConversation(chat.id);
+                              if (!mounted || generation != _loadGeneration) return;
+                              setState(() { _chat = loaded; _loading = false; _error = null;
+                                _toolEvents.clear(); _streamText = ''; _messageWindow = 40; });
+                              _bottom(force: true);
+                            } catch (e) {
+                              if (mounted) setState(() { _loading = false; _error = aiError(e); });
+                            }
                           },
                     onLongPress: _sending ? null : () => _renameChat(chat),
                     trailing: Row(mainAxisSize: MainAxisSize.min, children: [
@@ -477,6 +487,9 @@ class _AiChatPageState extends State<AiChatPage> {
                     onPressed: _loading ? null : _selectContext),
                 ]),
               ),
+              if (start > 0) TextButton(onPressed: () => setState(() {
+                _messageWindow += 40; _followLatest = false;
+              }), child: Text(aiText('loadEarlierMessages'))),
               Expanded(
                 child: _loading
                     ? const Center(child: CircularProgressIndicator())

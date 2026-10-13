@@ -63,12 +63,53 @@ class AiConversationStore {
     return result;
   });
 
+  Future<AiConversation> load(String user, String id) => _serial(() async {
+    final ids = await _index(user);
+    if (!ids.contains(id)) throw const AiException('invalidResponse');
+    return _load(user, id);
+  });
+
+  Future<AiConversation> _load(String user, String id) async {
+    final raw = await vault.readSecret(_chatKey(user, id));
+    if (raw == null) throw const AiException('invalidResponse');
+    final chat = AiConversation.fromJson(Map<String, dynamic>.from(jsonDecode(raw) as Map));
+    if (chat.accountId != user) throw const AiException('accountChanged');
+    return chat;
+  }
+
+  String _metaKey(String user, String id) => '${_chatKey(user, id)}.meta';
+  Map<String, Object?> _metadata(AiConversation chat) => {
+    'id': chat.id, 'accountId': chat.accountId, 'repo': chat.repo,
+    'branch': chat.branch, 'title': chat.title,
+    'messages': chat.messages.isEmpty ? [] : [AiMessage('user',
+      chat.messages.first.content.length > 120 ? chat.messages.first.content.substring(0, 120) : chat.messages.first.content).toJson()],
+  };
+
+  /// 只读加密预览；旧数据首次生成索引后不再加载所有正文。
+  Future<List<AiConversation>> summaries(String user) => _serial(() async {
+    final ids = await _index(user);
+    final result = <AiConversation>[];
+    for (final id in ids) {
+      var raw = await vault.readSecret(_metaKey(user, id));
+      if (raw == null) {
+        raw = jsonEncode(_metadata(await _load(user, id)));
+        await vault.writeSecret(_metaKey(user, id), raw);
+      }
+      final chat = AiConversation.fromJson(Map<String, dynamic>.from(jsonDecode(raw) as Map));
+      if (chat.accountId != user) throw const AiException('accountChanged');
+      result.add(chat);
+    }
+    return result;
+  });
+
   Future<void> save(AiConversation chat) {
     // 进入队列前固定快照，等待期间的 UI 修改不能污染待写入内容。
     final encoded = jsonEncode(chat.toJson());
+    final metadata = jsonEncode(_metadata(chat));
     return _serial(() async {
       final ids = await _index(chat.accountId);
       await vault.writeSecret(_chatKey(chat.accountId, chat.id), encoded);
+      await vault.writeSecret(_metaKey(chat.accountId, chat.id), metadata);
       final updated = <String>[chat.id, ...ids.where((id) => id != chat.id)];
       await vault.writeSecret(_indexKey(chat.accountId), jsonEncode(updated));
     });
@@ -79,5 +120,6 @@ class AiConversationStore {
     await vault.writeSecret(_indexKey(user),
         jsonEncode(ids.where((value) => value != id).toList()));
     await vault.deleteSecret(_chatKey(user, id));
+    await vault.deleteSecret(_metaKey(user, id));
   });
 }

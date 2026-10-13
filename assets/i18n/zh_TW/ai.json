@@ -145,5 +145,6 @@
   "tool_failed": "失敗",
   "tool_cancelled": "已取消",
   "copyCode": "複製程式碼",
-  "retryResponse": "重試純回覆（不執行工具）"
+  "retryResponse": "重試純回覆（不執行工具）",
+  "loadEarlierMessages": "載入較早訊息"
 }

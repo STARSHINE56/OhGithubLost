@@ -145,5 +145,6 @@
   "tool_failed": "Failed",
   "tool_cancelled": "Cancelled",
   "copyCode": "Copy code",
-  "retryResponse": "Retry response only (no tools)"
+  "retryResponse": "Retry response only (no tools)",
+  "loadEarlierMessages": "Load earlier messages"
 }

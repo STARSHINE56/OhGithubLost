@@ -7,7 +7,6 @@ import 'package:ohgithublost/domain/ai/ai_context_budget.dart';
 import 'package:ohgithublost/domain/ai/ai_models.dart';
 import 'package:ohgithublost/domain/ai/ai_service.dart';
 import 'package:ohgithublost/domain/ai/ai_stream_provider.dart';
-import 'package:ohgithublost/kernel/contract/ai_stream.dart';
 import 'package:ohgithublost/kernel/contract/disk_store.dart';
 
 void main() {

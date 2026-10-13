@@ -71,6 +71,8 @@ class SurfaceBridge {
   Future<List<String>> aiDetectModels({String? key, AiSettings? config}) =>
       domain.ai!.detectModels(key: key, config: config);
   Future<List<AiConversation>> aiConversations() => domain.ai!.conversations();
+  Future<List<AiConversation>> aiConversationSummaries() => domain.ai!.conversationSummaries();
+  Future<AiConversation> aiLoadConversation(String id) => domain.ai!.loadConversation(id);
   Future<AiConversation> aiNewChat({String repo = '', String branch = ''}) =>
       domain.ai!.newConversation(repo: repo, branch: branch);
   Future<void> aiDeleteChat(String id) => domain.ai!.deleteConversation(id);
