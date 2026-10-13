@@ -431,6 +431,24 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
       final repository = args['repository'] as String? ?? chat.repo;
       if (name == 'github_read') {
         final plan = AiGithubTools.read(args, repository);
+        if (args['action'] == 'my_repositories') {
+          final repos = <Object?>[];
+          final start = int.parse(plan.query['page']!);
+          for (var page = start; page < start + 10; page++) {
+            final result = await github('GET', plan.path, null,
+              {...plan.query, 'page': '$page'});
+            if (result is! List) throw const AiException('invalidResponse');
+            // 只回传必要字段，避免整批仓库 JSON 耗尽上下文。
+            repos.addAll(result.whereType<Map>().map((repo) => {
+              for (final key in ['id', 'full_name', 'description', 'private', 'default_branch', 'permissions'])
+                if (repo.containsKey(key)) key: repo[key],
+            }));
+            if (result.length < 100) return {'data': repos, 'complete': true,
+              'possibly_more': false, 'next_page': null};
+          }
+          return {'data': repos, 'complete': false, 'possibly_more': true,
+            'next_page': start + 10};
+        }
         final result = await github(plan.method, plan.path, plan.body, plan.query);
         // 分页工具显式返回当前页信息，禁止把一页当作所有仓库。
         return {'data': result, 'page': plan.query['page'],
