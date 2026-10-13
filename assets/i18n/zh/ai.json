@@ -57,7 +57,7 @@
   "showRead": "显示已读通知",
   "noNotifications": "暂无 GitHub 通知",
   "markRead": "标记已读",
-  "loadMore": "加载更多",
+  "loadMore": "加载下一页",
   "retry": "重试",
   "refresh": "刷新",
   "menu": "菜单",
@@ -129,5 +129,11 @@
   "copyMessage": "复制消息",
   "messageCopied": "消息已复制",
   "mobileInputHint": "输入消息…",
-  "draftHint": "可提前输入下一条草稿…"
+  "draftHint": "可提前输入下一条草稿…",
+  "selectRepository": "选择仓库",
+  "selectBranch": "选择分支",
+  "filterLoaded": "筛选已加载项",
+  "retryLoad": "重试加载",
+  "renameChat": "重命名会话",
+  "chatTitleHint": "输入标题，留空恢复默认"
 }

@@ -57,7 +57,7 @@
   "showRead": "Gelesene anzeigen",
   "noNotifications": "Keine GitHub-Benachrichtigungen",
   "markRead": "Als gelesen markieren",
-  "loadMore": "Mehr laden",
+  "loadMore": "Nächste Seite laden",
   "retry": "Erneut versuchen",
   "refresh": "Aktualisieren",
   "menu": "Menü",
@@ -129,5 +129,11 @@
   "copyMessage": "Nachricht kopieren",
   "messageCopied": "Nachricht kopiert",
   "mobileInputHint": "Nachricht eingeben…",
-  "draftHint": "Nächste Nachricht entwerfen…"
+  "draftHint": "Nächste Nachricht entwerfen…",
+  "selectRepository": "Repository auswählen",
+  "selectBranch": "Branch auswählen",
+  "filterLoaded": "Geladene Einträge filtern",
+  "retryLoad": "Laden wiederholen",
+  "renameChat": "Chat umbenennen",
+  "chatTitleHint": "Titel eingeben; leer für Standard"
 }

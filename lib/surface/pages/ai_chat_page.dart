@@ -11,6 +11,7 @@ import '../surface_bridge.dart';
 import '../types.dart';
 import '../util/link_opener.dart';
 import 'ai_confirmation.dart';
+import 'ai_context_picker.dart';
 import 'ai_settings_page.dart';
 import 'download_manager_page.dart';
 
@@ -208,6 +209,38 @@ class _AiChatPageState extends State<AiChatPage> {
     }
   }
 
+  Future<void> _selectContext() async {
+    final chat = _chat;
+    if (_sending || chat == null) return;
+    final choice = await showDialog<AiContextChoice>(context: context,
+      builder: (_) => AiContextPicker(surface: widget.surface));
+    if (choice == null || !mounted || !identical(chat, _chat)) return;
+    try {
+      await widget.surface.aiSetContext(chat, choice.repo, choice.branch);
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (mounted) setState(() => _error = aiError(e));
+    }
+  }
+
+  Future<void> _renameChat(AiConversation chat) async {
+    final controller = TextEditingController(text: chat.title);
+    final title = await showDialog<String>(context: context,
+      builder: (dialog) => AlertDialog(title: Text(aiText('renameChat')),
+        content: TextField(controller: controller, maxLength: 120,
+          decoration: InputDecoration(hintText: aiText('chatTitleHint'))),
+        actions: [TextButton(onPressed: () => Navigator.pop(dialog), child: Text(aiText('cancel'))),
+          FilledButton(onPressed: () => Navigator.pop(dialog, controller.text), child: Text(aiText('save')))]));
+    controller.dispose();
+    if (title == null || !mounted) return;
+    try {
+      await widget.surface.aiRenameChat(chat, title);
+      if (mounted) setState(() {});
+    } catch (e) {
+      if (mounted) setState(() => _error = aiError(e));
+    }
+  }
+
   Future<void> _logs() async {
     try {
       final entries = await widget.surface.aiAudit();
@@ -289,7 +322,7 @@ class _AiChatPageState extends State<AiChatPage> {
   Widget build(BuildContext context) {
     final visibleMessages = _visibleMessages;
     final history = _history.where((chat) =>
-      ('${chat.repo} ${chat.messages.isEmpty ? '' : chat.messages.first.content}')
+      ('${chat.title} ${chat.repo} ${chat.messages.isEmpty ? '' : chat.messages.first.content}')
         .toLowerCase().contains(_historyFilter.toLowerCase())).toList();
     return Scaffold(
     resizeToAvoidBottomInset: true,
@@ -337,7 +370,7 @@ class _AiChatPageState extends State<AiChatPage> {
                   return ListTile(
                     selected: chat.id == _chat?.id,
                     title: Text(
-                      chat.messages.isEmpty
+                      chat.title.isNotEmpty ? chat.title : chat.messages.isEmpty
                           ? aiText('newChat')
                           : chat.messages.first.content,
                       maxLines: 1,
@@ -356,7 +389,11 @@ class _AiChatPageState extends State<AiChatPage> {
                             Navigator.pop(context);
                             _bottom();
                           },
-                    trailing: IconButton(
+                    onLongPress: _sending ? null : () => _renameChat(chat),
+                    trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                      IconButton(tooltip: aiText('renameChat'), icon: const Icon(Icons.edit_outlined),
+                        onPressed: _sending ? null : () => _renameChat(chat)),
+                      IconButton(
                       tooltip: aiText('deleteChat'),
                       icon: const Icon(Icons.delete_outline),
                       onPressed: _sending
@@ -377,6 +414,7 @@ class _AiChatPageState extends State<AiChatPage> {
                               }
                             },
                     ),
+                    ]),
                   );
                 },
               ),
@@ -404,7 +442,10 @@ class _AiChatPageState extends State<AiChatPage> {
                   Expanded(child: Text(_chat?.repo.isNotEmpty == true
                     ? '${_chat!.repo} · ${_chat!.branch}' : aiText('accountContext'),
                     maxLines: 1, overflow: TextOverflow.ellipsis)),
-                  if (_sending) const Icon(Icons.lock_outline, size: 16),
+                  if (_sending) const Icon(Icons.lock_outline, size: 16)
+                  else IconButton(tooltip: aiText('selectRepository'),
+                    icon: const Icon(Icons.account_tree_outlined, size: 20),
+                    onPressed: _loading ? null : _selectContext),
                 ]),
               ),
               Expanded(

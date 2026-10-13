@@ -74,6 +74,14 @@ class SurfaceBridge {
   Future<AiConversation> aiNewChat({String repo = '', String branch = ''}) =>
       domain.ai!.newConversation(repo: repo, branch: branch);
   Future<void> aiDeleteChat(String id) => domain.ai!.deleteConversation(id);
+  Future<List<Map<String, dynamic>>> aiContextRepositories({int page = 1}) =>
+      domain.ai!.contextRepositories(page: page);
+  Future<List<String>> aiContextBranches(String repo, {int page = 1}) =>
+      domain.ai!.contextBranches(repo, page: page);
+  Future<void> aiSetContext(AiConversation chat, String repo, String branch) =>
+      domain.ai!.setContext(chat, repo, branch);
+  Future<void> aiRenameChat(AiConversation chat, String title) =>
+      domain.ai!.renameConversation(chat, title);
   Future<void> aiSend(
     AiConversation chat,
     String text,

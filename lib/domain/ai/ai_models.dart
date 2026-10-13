@@ -93,18 +93,21 @@ class AiConversation {
     required this.accountId,
     this.repo = '',
     this.branch = '',
+    this.title = '',
     List<AiMessage>? messages,
   }) : messages = messages ?? [];
   final String id;
   final String accountId;
   String repo;
   String branch;
+  String title;
   final List<AiMessage> messages;
   Map<String, Object?> toJson() => {
     'id': id,
     'accountId': accountId,
     'repo': repo,
     'branch': branch,
+    'title': title,
     'messages': messages.map((e) => e.toJson()).toList(),
   };
   factory AiConversation.fromJson(Map<String, dynamic> json) => AiConversation(
@@ -112,6 +115,7 @@ class AiConversation {
     accountId: json['accountId'] as String,
     repo: json['repo'] as String? ?? '',
     branch: json['branch'] as String? ?? '',
+    title: json['title'] as String? ?? '',
     messages: (json['messages'] as List)
         .map((e) => AiMessage.fromJson(Map<String, dynamic>.from(e as Map)))
         .toList(),

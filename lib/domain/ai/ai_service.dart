@@ -189,6 +189,50 @@ class AiService {
     await _checkAccount(chat.accountId);
   }
 
+  /// 本地上下文选择独立于模型，账号绑定且分页不隐式截断。
+  Future<List<Map<String, dynamic>>> contextRepositories({int page = 1}) async {
+    final user = await _account();
+    final plan = AiGithubTools.read({'action': 'my_repositories', 'page': page}, '');
+    final result = await _githubFor(user)(plan.method, plan.path, null, plan.query);
+    if (result is! List) throw const AiException('invalidResponse');
+    return result.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
+  Future<List<String>> contextBranches(String repo, {int page = 1}) async {
+    final user = await _account();
+    final plan = AiGithubTools.read({'action': 'branches', 'page': page}, repo);
+    final result = await _githubFor(user)(plan.method, plan.path, null, plan.query);
+    if (result is! List) throw const AiException('invalidResponse');
+    return result.whereType<Map>().map((e) => e['name']).whereType<String>().toList();
+  }
+
+  Future<void> setContext(AiConversation chat, String repo, String branch) async {
+    if (_busy || _polling) throw const AiException('busy');
+    await _checkAccount(chat.accountId);
+    if (repo.isEmpty) {
+      if (branch.isNotEmpty) throw const AiException('invalidProposal');
+    } else {
+      validateRepo(repo);
+      if (branch.isEmpty || branch.contains(RegExp(r'[\x00-\x1f]'))) throw const AiException('invalidProposal');
+      // 校验分支仍存在；不发写请求，不由模型指定任意 API 路径。
+      await _githubFor(chat.accountId)('GET', '/repos/$repo/branches/${Uri.encodeComponent(branch)}', null, {});
+    }
+    final updated = AiConversation.fromJson(Map<String, dynamic>.from(chat.toJson()))
+      ..repo = repo ..branch = branch;
+    await saveConversation(updated);
+    chat.repo = repo;
+    chat.branch = branch;
+  }
+
+  Future<void> renameConversation(AiConversation chat, String title) async {
+    if (_busy || _polling) throw const AiException('busy');
+    final normalized = title.trim();
+    if (normalized.length > 120 || normalized.contains(RegExp(r'[\x00-\x1f]'))) throw const AiException('invalidProposal');
+    final updated = AiConversation.fromJson(Map<String, dynamic>.from(chat.toJson()))..title = normalized;
+    await saveConversation(updated);
+    chat.title = normalized;
+  }
+
   Future<void> deleteConversation(String id) async {
     final user = await _account();
     await _chats.delete(user, id);
