@@ -117,5 +117,9 @@
   "markAllRead": "全部已读",
   "markAllReadSubmitted": "已提交全部已读。列表会刷新，GitHub 后台处理可能稍有延迟。",
   "github_manage": "GitHub 管理操作",
-  "managementWarning": "此操作可能修改权限、公开内容、合并或删除数据，部分操作不可撤销。请核对账号、目标和完整参数；取消不会执行。"
+  "managementWarning": "此操作可能修改权限、公开内容、合并或删除数据，部分操作不可撤销。请核对账号、目标和完整参数；取消不会执行。",
+  "preparingRequest": "正在准备请求…",
+  "requestingResponse": "正在等待 AI 回复…",
+  "executingTool": "正在执行 GitHub 工具…",
+  "awaitingConfirmation": "等待你确认操作…"
 }

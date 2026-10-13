@@ -117,5 +117,9 @@
   "markAllRead": "Alle als gelesen markieren",
   "markAllReadSubmitted": "Anfrage gesendet. GitHub verarbeitet sie eventuell im Hintergrund.",
   "github_manage": "GitHub-Verwaltung",
-  "managementWarning": "Diese Aktion kann Berechtigungen ändern, Daten veröffentlichen, zusammenführen oder löschen. Manche Aktionen sind unwiderruflich. Konto, Ziel und Parameter prüfen. Abbrechen schreibt nichts."
+  "managementWarning": "Diese Aktion kann Berechtigungen ändern, Daten veröffentlichen, zusammenführen oder löschen. Manche Aktionen sind unwiderruflich. Konto, Ziel und Parameter prüfen. Abbrechen schreibt nichts.",
+  "preparingRequest": "Anfrage wird vorbereitet…",
+  "requestingResponse": "Warten auf die KI-Antwort…",
+  "executingTool": "GitHub-Werkzeug wird ausgeführt…",
+  "awaitingConfirmation": "Warten auf Ihre Bestätigung…"
 }

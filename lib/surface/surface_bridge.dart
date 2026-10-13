@@ -77,8 +77,9 @@ class SurfaceBridge {
   Future<void> aiSend(
     AiConversation chat,
     String text,
-    AiConfirmation confirm,
-  ) => domain.ai!.send(chat, text, confirm);
+    AiConfirmation confirm, {
+    void Function(String state)? onProgress,
+  }) => domain.ai!.send(chat, text, confirm, onProgress: onProgress);
   Future<List<Map<String, dynamic>>> aiAudit() => domain.ai!.audit();
   Future<Map<String, dynamic>> aiRollback(
     Map<String, dynamic> entry,

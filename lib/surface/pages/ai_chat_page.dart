@@ -35,7 +35,14 @@ class _AiChatPageState extends State<AiChatPage> {
   List<AiConversation> _history = [];
   bool _loading = true, _sending = false;
   String? _error;
+  AiMessage? _pendingMessage;
+  String _sendStatus = 'preparingRequest';
   int _loadGeneration = 0;
+
+  List<AiMessage> get _visibleMessages => [
+    ...?_chat?.messages,
+    if (_pendingMessage != null) _pendingMessage!,
+  ];
 
   @override
   void initState() {
@@ -118,14 +125,19 @@ class _AiChatPageState extends State<AiChatPage> {
     if (_sending || _chat == null || text.isEmpty) {
       return;
     }
+    final chat = _chat!;
+    final previousUserCount = chat.messages.where((m) => m.role == 'user').length;
     _input.clear();
     setState(() {
       _sending = true;
       _error = null;
+      _pendingMessage = AiMessage('user', text);
+      _sendStatus = 'preparingRequest';
     });
+    _bottom();
     try {
       final request = widget.surface.aiSend(
-        _chat!,
+        chat,
         text,
         (proposal) async {
           if (!mounted || ModalRoute.of(context)?.isCurrent != true) {
@@ -133,9 +145,19 @@ class _AiChatPageState extends State<AiChatPage> {
           }
           return confirmAiProposal(context, proposal);
         },
+        onProgress: (state) {
+          if (!mounted || !identical(_chat, chat)) return;
+          setState(() {
+            if (chat.messages.where((m) => m.role == 'user').length > previousUserCount) {
+              _pendingMessage = null;
+            }
+            if (state != 'messageAccepted' && state != 'messagesUpdated') {
+              _sendStatus = state;
+            }
+          });
+          _bottom();
+        },
       );
-      setState(() {});
-      _bottom();
       await request;
       _history = await widget.surface.aiConversations();
     } catch (e) {
@@ -147,7 +169,10 @@ class _AiChatPageState extends State<AiChatPage> {
       }
     } finally {
       if (mounted) {
-        setState(() => _sending = false);
+        setState(() {
+          _sending = false;
+          _pendingMessage = null;
+        });
         _bottom();
       }
     }
@@ -244,7 +269,9 @@ class _AiChatPageState extends State<AiChatPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) {
+    final visibleMessages = _visibleMessages;
+    return Scaffold(
     resizeToAvoidBottomInset: true,
     appBar: AppBar(
       title: Text(aiText('title')),
@@ -347,7 +374,7 @@ class _AiChatPageState extends State<AiChatPage> {
               Expanded(
                 child: _loading
                     ? const Center(child: CircularProgressIndicator())
-                    : _chat?.messages.isEmpty != false
+                    : visibleMessages.isEmpty
                     ? Center(
                         child: Padding(
                           padding: const EdgeInsets.all(24),
@@ -360,9 +387,9 @@ class _AiChatPageState extends State<AiChatPage> {
                     : ListView.builder(
                         controller: _scroll,
                         padding: const EdgeInsets.all(16),
-                        itemCount: _chat!.messages.length,
+                        itemCount: visibleMessages.length,
                         itemBuilder: (context, index) {
-                          final message = _chat!.messages[index];
+                          final message = visibleMessages[index];
                           final user = message.role == 'user';
                           return Align(
                             alignment: user
@@ -430,7 +457,8 @@ class _AiChatPageState extends State<AiChatPage> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                       const SizedBox(width: 12),
-                      Text(aiText('working')),
+                      Expanded(child: Text(aiText(_sendStatus),
+                        key: const ValueKey('ai-send-status'), maxLines: 2)),
                     ],
                   ),
                 ),
@@ -490,4 +518,5 @@ class _AiChatPageState extends State<AiChatPage> {
       ),
     ),
   );
+  }
 }

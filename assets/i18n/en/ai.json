@@ -117,5 +117,9 @@
   "markAllRead": "Mark all as read",
   "markAllReadSubmitted": "Request submitted. Refreshing; GitHub may process it in the background.",
   "github_manage": "GitHub management",
-  "managementWarning": "This may change permissions, publish, merge or delete data. Some actions cannot be undone. Check the account, target and full parameters. Cancel performs no write."
+  "managementWarning": "This may change permissions, publish, merge or delete data. Some actions cannot be undone. Check the account, target and full parameters. Cancel performs no write.",
+  "preparingRequest": "Preparing request…",
+  "requestingResponse": "Waiting for AI response…",
+  "executingTool": "Executing GitHub tool…",
+  "awaitingConfirmation": "Waiting for your confirmation…"
 }

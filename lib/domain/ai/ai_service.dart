@@ -222,12 +222,24 @@ class AiService {
   Future<void> send(
     AiConversation chat,
     String text,
-    AiConfirmation confirm,
-  ) async {
+    AiConfirmation confirm, {
+    void Function(String state)? onProgress,
+  }) async {
+    void progress(String state) {
+      // 展示层回调失败不能改变已确认的业务操作结果。
+      try { onProgress?.call(state); } catch (_) {}
+    }
+    Future<bool> confirmation(AiProposal proposal) async {
+      progress('awaitingConfirmation');
+      final accepted = await confirm(proposal);
+      progress(accepted ? 'executingTool' : 'cancelled');
+      return accepted;
+    }
     if (_busy || _polling) {
       throw const AiException('busy');
     }
     _busy = true;
+    progress('preparingRequest');
     try {
       await _checkAccount(chat.accountId);
       final config = await settings();
@@ -253,15 +265,18 @@ class AiService {
       ).firstMatch(text.trim());
       if (command != null) {
         final target = command.group(1)!.trim();
+        progress('executingTool');
         await switchRepo(chat, target);
         chat.messages.add(AiMessage('user', text));
         chat.messages.add(
           AiMessage('assistant', '${chat.repo} · ${chat.branch}'),
         );
+        progress('messagesUpdated');
         await saveConversation(chat);
         return;
       }
       chat.messages.add(AiMessage('user', text));
+      progress('messageAccepted');
       await saveConversation(chat);
       final messages = <Map<String, Object?>>[
         {
@@ -289,6 +304,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
       var toolCount = 0;
       for (var step = 0; step < 12; step++) {
         await _checkAccount(chat.accountId);
+        progress('requestingResponse');
         final response = await provider(config, 'chat/completions', key, {
           'model': model,
           'messages': messages,
@@ -311,6 +327,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
           chat.messages.add(
             AiMessage('assistant', reply['content'] as String? ?? ''),
           );
+          progress('messagesUpdated');
           await saveConversation(chat);
           return;
         }
@@ -326,7 +343,9 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
             final args = Map<String, dynamic>.from(
               jsonDecode(function['arguments'] as String) as Map,
             );
-            result = await _tool(chat, name, args, confirm);
+            progress('executingTool');
+            result = await _tool(chat, name, args, confirmation);
+            progress('messagesUpdated');
             if (result is Map && result['cancelled'] == true) {
               chat.messages.add(
                 AiMessage('assistant', 'cancelled', notice: true),
