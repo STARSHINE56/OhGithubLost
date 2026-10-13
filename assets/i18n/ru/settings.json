@@ -171,5 +171,6 @@
   "expandGroup": "Развернуть",
   "collapseGroup": "Свернуть",
   "logsSaving": "Запись в файл включена",
-  "logsLineCount": "Строк: {count}"
+  "logsLineCount": "Строк: {count}",
+  "connectionsAssistantGroup": "Подключения и помощник"
 }

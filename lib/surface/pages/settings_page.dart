@@ -39,6 +39,7 @@ import '../types.dart';
 import '../util/accel.dart';
 import '../widgets/code_editor_field.dart';
 import '../widgets/settings/settings_group.dart';
+import '../widgets/settings/settings_navigation_group.dart';
 import 'about_page.dart';
 import 'ai_settings_page.dart';
 import 'github_notifications_page.dart';
@@ -207,20 +208,8 @@ class _SettingsPageState extends State<SettingsPage> {
     ThemeData theme, {
     required IconData icon,
     required String title,
-    String? subtitle,
     required VoidCallback onTap,
-  }) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: ListTile(
-        leading: Icon(icon),
-        title: Text(title),
-        subtitle: subtitle == null ? null : Text(subtitle),
-        trailing: const Icon(Icons.chevron_right),
-        onTap: onTap,
-      ),
-    );
-  }
+  }) => OgLSettingsNavigationRow(icon: icon, title: title, onTap: onTap);
 
   /// 打开分区页（第二层 · 折叠式），共享 [_openGroups] 折叠状态。
   void _openSection(String title, List<Widget Function()> builders) {
@@ -494,7 +483,6 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListenableBuilder(
         listenable: _settings,
         builder: (BuildContext context, Widget? _) {
-          final OgLSettings value = _settings.settings;
           final String? saveError = _settings.lastError;
           return ListView(
             padding: const EdgeInsets.all(16),
@@ -528,76 +516,49 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
               ),
               _accountCard(theme),
-              _categoryTile(
-                theme,
-                icon: Icons.tune,
-                title: _t('groupInterface'),
-                subtitle: _interfaceSummary(value),
-                onTap: () => _openSection(
-                  _t('groupInterface'),
-                  <Widget Function()>[() => _interfaceGroup(_settings.settings)],
-                ),
+              OgLSettingsNavigationGroup(
+                title: _t('appearanceGroup'),
+                children: [
+                  _categoryTile(theme, icon: Icons.palette_outlined,
+                    title: _t('groupInterface'),
+                    onTap: () => _openSection(_t('groupInterface'),
+                      [() => _interfaceGroup(_settings.settings)])),
+                  _categoryTile(theme, icon: Icons.code,
+                    title: _t('codeAndFiles'),
+                    onTap: () => _openSection(_t('codeAndFiles'),
+                      [() => _codeGroup(context, Theme.of(context), _settings.settings)])),
+                ],
               ),
-              _categoryTile(
-                theme,
-                icon: Icons.code,
-                title: _t('codeAndFiles'),
-                subtitle: _codeSummary(value),
-                onTap: () => _openSection(
-                  _t('codeAndFiles'),
-                  <Widget Function()>[() => _codeGroup(context, Theme.of(context), _settings.settings)],
-                ),
+              OgLSettingsNavigationGroup(
+                title: _t('connectionsAssistantGroup'),
+                children: [
+                  _categoryTile(theme, icon: Icons.storage_outlined,
+                    title: _t('groupStorageNetwork'),
+                    onTap: () => _openSection(_t('groupStorageNetwork'),
+                      [() => _storageGroup(Theme.of(context), _settings.settings)])),
+                  if (widget.surface.hasAi)
+                    _categoryTile(theme, icon: Icons.auto_awesome_outlined,
+                      title: aiText('title'),
+                      onTap: () => Navigator.of(context).push<void>(
+                        MaterialPageRoute<void>(builder: (_) => AiSettingsPage(surface: widget.surface)))),
+                ],
               ),
-              _categoryTile(
-                theme,
-                icon: Icons.storage_outlined,
-                title: _t('groupStorageNetwork'),
-                onTap: () => _openSection(
-                  _t('groupStorageNetwork'),
-                  <Widget Function()>[() => _storageGroup(Theme.of(context), _settings.settings)],
-                ),
-              ),
-              if (widget.surface.hasAi) _categoryTile(
-                theme,
-                icon: Icons.smart_toy_outlined,
-                title: OgLI18n.instance.t('ai', 'title'),
-                subtitle: OgLI18n.instance.t('ai', 'privacy'),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (BuildContext _) => AiSettingsPage(surface: widget.surface),
-                  ),
-                ),
-              ),
-              _categoryTile(
-                theme,
-                icon: Icons.help_outline,
-                title: _t('groupAboutHelp'),
-                subtitle: _aboutSummary(),
-                onTap: () => _openSection(
-                  _t('groupAboutHelp'),
-                  <Widget Function()>[() => _aboutGroup(theme)],
-                ),
-              ),
-              _categoryTile(
-                theme,
-                icon: Icons.article_outlined,
-                title: _t('logs'),
-                subtitle: _logsSummary(),
-                onTap: () => _openSection(
-                  _t('logs'),
-                  <Widget Function()>[() => _logsGroup(theme)],
-                ),
-              ),
-              _categoryTile(
-                theme,
-                icon: Icons.notifications_outlined,
-                title: aiText('notifications'),
-                subtitle: aiText('appLogs'),
-                onTap: () => Navigator.of(context).push<void>(
-                  MaterialPageRoute<void>(builder: (_) => widget.surface.hasAi
-                    ? GithubNotificationsPage(surface: widget.surface, initialTab: 1)
-                    : const NotificationsPage()),
-                ),
+              OgLSettingsNavigationGroup(
+                title: _t('maintenanceGroup'),
+                children: [
+                  _categoryTile(theme, icon: Icons.notifications_outlined,
+                    title: aiText('notifications'),
+                    onTap: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute<void>(builder: (_) => widget.surface.hasAi
+                        ? GithubNotificationsPage(surface: widget.surface)
+                        : const NotificationsPage()))),
+                  _categoryTile(theme, icon: Icons.article_outlined,
+                    title: _t('logs'),
+                    onTap: () => _openSection(_t('logs'), [() => _logsGroup(Theme.of(context))])),
+                  _categoryTile(theme, icon: Icons.help_outline,
+                    title: _t('groupAboutHelp'),
+                    onTap: () => _openSection(_t('groupAboutHelp'), [() => _aboutGroup(Theme.of(context))])),
+                ],
               ),
               // 危险区：与上面所有分组**双重拉开**（留白 + 分隔线 + 告警配色），
               // 免得"收尾顺手点一下"就把设置全清了。
@@ -1675,7 +1636,9 @@ class _SettingsPageState extends State<SettingsPage> {
   /// 一眼知道"现在是谁登录着"（退出登录在「用户页」，那里才是危险动作的归属地）。
   Widget _accountCard(ThemeData theme) => Card(
         clipBehavior: Clip.antiAlias,
-        margin: const EdgeInsets.only(bottom: 10),
+        margin: EdgeInsets.zero,
+        elevation: 0,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[

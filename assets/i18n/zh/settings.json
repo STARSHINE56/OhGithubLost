@@ -171,5 +171,6 @@
   "expandGroup": "展开",
   "collapseGroup": "收起",
   "logsSaving": "已落盘",
-  "logsLineCount": "{count} 行"
+  "logsLineCount": "{count} 行",
+  "connectionsAssistantGroup": "连接与助手"
 }

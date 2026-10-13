@@ -171,5 +171,6 @@
   "expandGroup": "Erweitern",
   "collapseGroup": "Einklappen",
   "logsSaving": "Wird protokolliert",
-  "logsLineCount": "{count} Zeilen"
+  "logsLineCount": "{count} Zeilen",
+  "connectionsAssistantGroup": "Verbindungen und Assistent"
 }
