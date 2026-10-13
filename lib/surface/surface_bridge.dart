@@ -87,7 +87,12 @@ class SurfaceBridge {
     String text,
     AiConfirmation confirm, {
     void Function(String state)? onProgress,
-  }) => domain.ai!.send(chat, text, confirm, onProgress: onProgress);
+    void Function(String text)? onText,
+    void Function(Map<String, String> event)? onTool,
+    bool retry = false,
+  }) => domain.ai!.send(chat, text, confirm, onProgress: onProgress, onText: onText, onTool: onTool, retry: retry);
+  bool get aiCanCancel => domain.ai?.canCancel ?? false;
+  void aiCancelRequest() => domain.ai?.cancelRequest();
   Future<List<Map<String, dynamic>>> aiAudit() => domain.ai!.audit();
   Future<Map<String, dynamic>> aiRollback(
     Map<String, dynamic> entry,

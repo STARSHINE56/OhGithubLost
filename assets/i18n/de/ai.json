@@ -135,5 +135,15 @@
   "filterLoaded": "Geladene Einträge filtern",
   "retryLoad": "Laden wiederholen",
   "renameChat": "Chat umbenennen",
-  "chatTitleHint": "Titel eingeben; leer für Standard"
+  "chatTitleHint": "Titel eingeben; leer für Standard",
+  "stopRequest": "Generierung stoppen",
+  "requestStopped": "Anfrage gestoppt; ausgeführte GitHub-Aktionen bleiben bestehen",
+  "contextTooLarge": "Kontext zu groß; Dateien verkleinern oder neuen Chat starten",
+  "toolActivity": "Werkzeugaktivität",
+  "tool_running": "Läuft",
+  "tool_completed": "Abgeschlossen",
+  "tool_failed": "Fehlgeschlagen",
+  "tool_cancelled": "Abgebrochen",
+  "copyCode": "Code kopieren",
+  "retryResponse": "Nur Antwort wiederholen (ohne Werkzeuge)"
 }

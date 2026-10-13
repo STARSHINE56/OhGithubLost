@@ -135,5 +135,15 @@
   "filterLoaded": "筛选已加载项",
   "retryLoad": "重试加载",
   "renameChat": "重命名会话",
-  "chatTitleHint": "输入标题，留空恢复默认"
+  "chatTitleHint": "输入标题，留空恢复默认",
+  "stopRequest": "停止生成",
+  "requestStopped": "请求已停止；已完成的 GitHub 操作不会被撤销",
+  "contextTooLarge": "上下文过大，请缩小文件或新建会话",
+  "toolActivity": "工具执行记录",
+  "tool_running": "执行中",
+  "tool_completed": "已完成",
+  "tool_failed": "失败",
+  "tool_cancelled": "已取消",
+  "copyCode": "复制代码",
+  "retryResponse": "重试纯回复（不执行工具）"
 }

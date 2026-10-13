@@ -135,5 +135,15 @@
   "filterLoaded": "篩選已載入項目",
   "retryLoad": "重試載入",
   "renameChat": "重新命名對話",
-  "chatTitleHint": "輸入標題，留空恢復預設"
+  "chatTitleHint": "輸入標題，留空恢復預設",
+  "stopRequest": "停止產生",
+  "requestStopped": "請求已停止；已完成的 GitHub 操作不會撤銷",
+  "contextTooLarge": "上下文過大，請縮小檔案或建立新對話",
+  "toolActivity": "工具執行記錄",
+  "tool_running": "執行中",
+  "tool_completed": "已完成",
+  "tool_failed": "失敗",
+  "tool_cancelled": "已取消",
+  "copyCode": "複製程式碼",
+  "retryResponse": "重試純回覆（不執行工具）"
 }

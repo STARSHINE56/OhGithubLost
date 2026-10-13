@@ -135,5 +135,15 @@
   "filterLoaded": "Filtrer les éléments chargés",
   "retryLoad": "Réessayer le chargement",
   "renameChat": "Renommer la conversation",
-  "chatTitleHint": "Titre ; vide pour le titre par défaut"
+  "chatTitleHint": "Titre ; vide pour le titre par défaut",
+  "stopRequest": "Arrêter la génération",
+  "requestStopped": "Requête arrêtée ; les actions GitHub terminées ne sont pas annulées",
+  "contextTooLarge": "Contexte trop grand ; réduisez les fichiers ou créez une conversation",
+  "toolActivity": "Activité des outils",
+  "tool_running": "En cours",
+  "tool_completed": "Terminé",
+  "tool_failed": "Échec",
+  "tool_cancelled": "Annulé",
+  "copyCode": "Copier le code",
+  "retryResponse": "Réessayer la réponse seule (sans outils)"
 }

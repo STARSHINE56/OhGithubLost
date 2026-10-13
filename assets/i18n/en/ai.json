@@ -135,5 +135,15 @@
   "filterLoaded": "Filter loaded items",
   "retryLoad": "Retry loading",
   "renameChat": "Rename conversation",
-  "chatTitleHint": "Enter a title; leave blank for default"
+  "chatTitleHint": "Enter a title; leave blank for default",
+  "stopRequest": "Stop generation",
+  "requestStopped": "Request stopped; completed GitHub actions are not undone",
+  "contextTooLarge": "Context too large; reduce files or start a new chat",
+  "toolActivity": "Tool activity",
+  "tool_running": "Running",
+  "tool_completed": "Completed",
+  "tool_failed": "Failed",
+  "tool_cancelled": "Cancelled",
+  "copyCode": "Copy code",
+  "retryResponse": "Retry response only (no tools)"
 }

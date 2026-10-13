@@ -5,11 +5,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+
 
 import '../surface_bridge.dart';
 import '../types.dart';
-import '../util/link_opener.dart';
+import '../widgets/ai_message_body.dart';
 import 'ai_confirmation.dart';
 import 'ai_context_picker.dart';
 import 'ai_settings_page.dart';
@@ -37,6 +37,10 @@ class _AiChatPageState extends State<AiChatPage> {
   bool _loading = true, _sending = false;
   String? _error;
   AiMessage? _pendingMessage;
+  String _streamText = '';
+  final _toolEvents = <Map<String, String>>[];
+  bool _toolAttempted = false;
+  String? _retryText;
   String _sendStatus = 'preparingRequest';
   int _loadGeneration = 0;
   bool _followLatest = true;
@@ -46,6 +50,7 @@ class _AiChatPageState extends State<AiChatPage> {
   List<AiMessage> get _visibleMessages => [
     ...?_chat?.messages,
     if (_pendingMessage != null) _pendingMessage!,
+    if (_streamText.isNotEmpty) AiMessage('assistant', _streamText),
   ];
 
   @override
@@ -137,7 +142,7 @@ class _AiChatPageState extends State<AiChatPage> {
     }
   });
 
-  Future<void> _send() async {
+  Future<void> _send({bool retry = false}) async {
     final text = _input.text.trim();
     if (_sending || _chat == null || text.isEmpty) {
       return;
@@ -148,8 +153,12 @@ class _AiChatPageState extends State<AiChatPage> {
     setState(() {
       _sending = true;
       _error = null;
-      _pendingMessage = AiMessage('user', text);
+      _pendingMessage = retry ? null : AiMessage('user', text);
       _sendStatus = 'preparingRequest';
+      _streamText = '';
+      _toolEvents.clear();
+      _toolAttempted = false;
+      _retryText = null;
     });
     _followLatest = true;
     _bottom(force: true);
@@ -169,11 +178,28 @@ class _AiChatPageState extends State<AiChatPage> {
             if (chat.messages.where((m) => m.role == 'user').length > previousUserCount) {
               _pendingMessage = null;
             }
+            if (state == 'messagesUpdated' || state == 'requestingResponse' || state == 'executingTool') {
+              _streamText = '';
+            }
             if (state != 'messageAccepted' && state != 'messagesUpdated') {
               _sendStatus = state;
             }
           });
           _bottom();
+        },
+        retry: retry,
+        onText: (text) {
+          if (!mounted || !identical(_chat, chat)) return;
+          setState(() => _streamText = text);
+          _bottom();
+        },
+        onTool: (event) {
+          if (!mounted || !identical(_chat, chat)) return;
+          setState(() {
+            _toolAttempted = true;
+            if (event['status'] == 'running') { _toolEvents.add(Map.of(event)); }
+            else if (_toolEvents.isNotEmpty) { _toolEvents.last = Map.of(event); }
+          });
         },
       );
       await request;
@@ -182,6 +208,8 @@ class _AiChatPageState extends State<AiChatPage> {
       if (mounted) {
         setState(() {
           _error = aiError(e);
+          // 有任何工具尝试就不提供一键重试，避免重复远端写入。
+          _retryText = !_toolAttempted && e is AiException && e.code != 'requestStopped' ? text : null;
           if (_input.text.trim().isEmpty) _input.text = text;
         });
       }
@@ -190,6 +218,7 @@ class _AiChatPageState extends State<AiChatPage> {
         setState(() {
           _sending = false;
           _pendingMessage = null;
+          _streamText = '';
         });
         _bottom();
       }
@@ -504,22 +533,7 @@ class _AiChatPageState extends State<AiChatPage> {
                                         }),
                                     ]),
                                     const SizedBox(height: 8),
-                                    MarkdownBody(
-                                      data: message.notice
-                                          ? aiText(message.content)
-                                          : message.content,
-                                      selectable: true,
-                                      onTapLink: (text, href, title) {
-                                        if (href != null &&
-                                            ['https', 'http'].contains(
-                                              Uri.tryParse(href)?.scheme,
-                                            )) {
-                                          unawaited(
-                                            openLinkOrCopy(context, href),
-                                          );
-                                        }
-                                      },
-                                    ),
+                                    AiMessageBody(text: message.notice ? aiText(message.content) : message.content),
                                     for (final artifact in message.artifacts)
                                       OutlinedButton.icon(
                                         icon: const Icon(Icons.download),
@@ -541,6 +555,14 @@ class _AiChatPageState extends State<AiChatPage> {
                 Padding(padding: const EdgeInsets.only(bottom: 8),
                   child: FilledButton.tonalIcon(onPressed: () => _bottom(force: true),
                     icon: const Icon(Icons.arrow_downward, size: 18), label: Text(aiText('latestMessages')))),
+              if (_toolEvents.isNotEmpty)
+                ExpansionTile(title: Text(aiText('toolActivity')),
+                  subtitle: Text('${_toolEvents.length}'),
+                  children: [for (final event in _toolEvents)
+                    ListTile(dense: true,
+                      leading: Icon(event['status'] == 'completed' ? Icons.check_circle_outline : event['status'] == 'failed' ? Icons.error_outline : Icons.pending_outlined),
+                      title: Text(event['name'] ?? ''),
+                      subtitle: Text('${event['repo'] ?? ''} · ${aiText('tool_${event['status']}')}'))]),
               if (_sending)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -554,9 +576,14 @@ class _AiChatPageState extends State<AiChatPage> {
                       const SizedBox(width: 12),
                       Expanded(child: Text(aiText(_sendStatus),
                         key: const ValueKey('ai-send-status'), maxLines: 2)),
+                      IconButton(tooltip: aiText('stopRequest'), icon: const Icon(Icons.stop_circle_outlined),
+                        onPressed: widget.surface.aiCanCancel ? widget.surface.aiCancelRequest : null),
                     ],
                   ),
                 ),
+              if (_retryText != null && !_sending)
+                TextButton.icon(icon: const Icon(Icons.refresh), label: Text(aiText('retryResponse')),
+                  onPressed: () { _input.text = _retryText!; _send(retry: true); }),
               if (_error != null)
                 ListTile(
                   leading: const Icon(Icons.error_outline),

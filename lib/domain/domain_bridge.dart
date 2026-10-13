@@ -25,6 +25,7 @@ import '../kernel/contract/storage_export.dart';
 import '../kernel/environment.dart';
 import 'ai/ai_provider.dart';
 import 'ai/ai_service.dart';
+import 'ai/ai_stream_provider.dart';
 import 'gh/gh_api.dart';
 import 'gh/gh_auth.dart';
 import 'gh/gh_client.dart';
@@ -458,7 +459,9 @@ class DomainLayerModule extends OgLModule {
           : jsonDecode(response.body);
     }
 
-    final provider = AiProvider(AiHttpTransport().send);
+    final transport = AiHttpTransport();
+    final provider = AiProvider(transport.send);
+    final streaming = AiStreamProvider(transport.send, transport.stream);
     final bridge = DomainBridge(
       ai: AiService(
         store: base.disk.kv,
@@ -466,6 +469,7 @@ class DomainLayerModule extends OgLModule {
         github: githubRequest,
         accountGithub: notificationGithub,
         provider: provider.request,
+        streamProvider: streaming.request,
         account: ghAuth.activeAccountId,
       ),
       productivity: ProductivityService(

@@ -3,7 +3,9 @@ library;
 
 import 'dart:convert';
 
+import '../../kernel/contract/ai_stream.dart';
 import '../../kernel/contract/disk_store.dart';
+import 'ai_context_budget.dart';
 import 'ai_conversation_store.dart';
 import 'ai_github_tools.dart';
 import 'ai_models.dart';
@@ -18,6 +20,7 @@ class AiService {
     required this.provider,
     required this.account,
     this.accountGithub,
+    this.streamProvider,
   }) : _store = store,
        _vault = vault,
        _chats = AiConversationStore(vault);
@@ -26,6 +29,13 @@ class AiService {
   final DiskVault _vault;
   final AiGithubRequest github;
   final AiProviderRequest provider;
+  final Future<Map<String, dynamic>> Function(AiSettings, String, String,
+    Map<String, Object?>, AiCancellation, void Function(String))? streamProvider;
+  AiCancellation? _activeCancellation;
+  bool _writeInFlight = false;
+  bool get canCancel => _busy && !_writeInFlight;
+  void cancelRequest() { if (canCancel) _activeCancellation?.cancel(); }
+
   final Future<String?> Function() account;
   final Future<Object?> Function(
     String accountId,
@@ -268,7 +278,11 @@ class AiService {
     String text,
     AiConfirmation confirm, {
     void Function(String state)? onProgress,
+    void Function(String text)? onText,
+    void Function(Map<String, String> event)? onTool,
+    bool retry = false,
   }) async {
+    final cancellation = AiCancellation();
     void progress(String state) {
       // 展示层回调失败不能改变已确认的业务操作结果。
       try { onProgress?.call(state); } catch (_) {}
@@ -276,6 +290,8 @@ class AiService {
     Future<bool> confirmation(AiProposal proposal) async {
       progress('awaitingConfirmation');
       final accepted = await confirm(proposal);
+      if (cancellation.isCancelled) return false;
+      if (accepted) { _writeInFlight = true; }
       progress(accepted ? 'executingTool' : 'cancelled');
       return accepted;
     }
@@ -283,6 +299,7 @@ class AiService {
       throw const AiException('busy');
     }
     _busy = true;
+    _activeCancellation = cancellation;
     progress('preparingRequest');
     try {
       await _checkAccount(chat.accountId);
@@ -319,7 +336,12 @@ class AiService {
         await saveConversation(chat);
         return;
       }
-      chat.messages.add(AiMessage('user', text));
+      if (retry) {
+        // 只重试最后一条相同用户消息，绝不自动重放已执行的工具。
+        if (chat.messages.isEmpty || chat.messages.last.role != 'user' || chat.messages.last.content != text) {
+          throw const AiException('invalidProposal');
+        }
+      } else { chat.messages.add(AiMessage('user', text)); }
       progress('messageAccepted');
       await saveConversation(chat);
       final messages = <Map<String, Object?>>[
@@ -337,25 +359,25 @@ Switch repository with switch_repository; ambiguous names need owner/name.
 Artifacts are ZIP archives, not necessarily APKs; do not invent download URLs.
 Use workflow inputs only if specified by the user; list workflow YAML to inspect required inputs.''',
         },
-        ...chat.messages.reversed
-            .take(24)
-            .toList()
-            .reversed
-            .map(
-              (e) => <String, Object?>{'role': e.role, 'content': e.content},
-            ),
+        ...AiContextBudget.history(chat.messages),
       ];
       var toolCount = 0;
       for (var step = 0; step < 12; step++) {
         await _checkAccount(chat.accountId);
         progress('requestingResponse');
-        final response = await provider(config, 'chat/completions', key, {
-          'model': model,
-          'messages': messages,
-          'tools': _tools,
-          'stream': false,
-          'max_tokens': 8192,
-        });
+        cancellation.check();
+        AiContextBudget.check(messages);
+        final body = <String, Object?>{
+          'model': model, 'messages': messages, 'tools': retry ? <Map<String, Object?>>[] : _tools,
+          'stream': false, 'max_tokens': 8192,
+        };
+        final streaming = streamProvider;
+        final response = streaming == null
+          ? await provider(config, 'chat/completions', key, body)
+          : await streaming(config, 'chat/completions', key, body, cancellation, (text) {
+              try { onText?.call(text); } catch (_) {}
+            });
+        cancellation.check();
         final choices = response['choices'] as List?;
         if (choices == null || choices.isEmpty) {
           throw const AiException('invalidResponse');
@@ -366,6 +388,7 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
         }
         final reply = Map<String, dynamic>.from(choice['message'] as Map);
         final calls = reply['tool_calls'] as List? ?? [];
+        if (retry && calls.isNotEmpty) throw const AiException('invalidProposal');
         messages.add(Map<String, Object?>.from(reply));
         if (calls.isEmpty) {
           chat.messages.add(
@@ -382,6 +405,11 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
           final call = rawCall as Map;
           final function = call['function'] as Map;
           final name = function['name'] as String;
+          cancellation.check();
+          void toolEvent(String status) {
+            try { onTool?.call({'name': name, 'status': status, 'repo': chat.repo}); } catch (_) {}
+          }
+          toolEvent('running');
           Object? result;
           try {
             final args = Map<String, dynamic>.from(
@@ -389,6 +417,8 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
             );
             progress('executingTool');
             result = await _tool(chat, name, args, confirmation);
+            _writeInFlight = false;
+            toolEvent(result is Map && result['cancelled'] == true ? 'cancelled' : 'completed');
             progress('messagesUpdated');
             if (result is Map && result['cancelled'] == true) {
               chat.messages.add(
@@ -403,6 +433,8 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
               'status': 'completed',
             });
           } catch (error) {
+            _writeInFlight = false;
+            toolEvent('failed');
             // 返回错误键，不把网络异常中的凭据/请求体回送模型或通用日志。
             final code = error is AiException ? error.code : 'requestFailed';
             result = {'error': code};
@@ -421,7 +453,12 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
         }
       }
       throw const AiException('toolLimit');
+    } on AiRequestCancelled {
+      // 流式部分文本仅显示不入历史；不会宣称已写入操作被回滚。
+      throw const AiException('requestStopped');
     } finally {
+      _activeCancellation = null;
+      _writeInFlight = false;
       _busy = false;
     }
   }

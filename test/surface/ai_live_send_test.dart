@@ -15,7 +15,8 @@ class LiveAi extends fixture.DelayedAi {
   final release = Completer<void>();
   @override
   Future<void> send(AiConversation chat, String text, AiConfirmation confirm,
-      {void Function(String state)? onProgress}) async {
+      {void Function(String state)? onProgress, void Function(String text)? onText,
+      void Function(Map<String, String> event)? onTool, bool retry = false}) async {
     onProgress?.call('preparingRequest');
     started.complete();
     await release.future;
