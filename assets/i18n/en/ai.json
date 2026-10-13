@@ -121,5 +121,13 @@
   "preparingRequest": "Preparing request…",
   "requestingResponse": "Waiting for AI response…",
   "executingTool": "Executing GitHub tool…",
-  "awaitingConfirmation": "Waiting for your confirmation…"
+  "awaitingConfirmation": "Waiting for your confirmation…",
+  "searchHistory": "Search chats or repositories",
+  "deleteChatWarning": "Delete this chat and its local messages? This cannot be undone.",
+  "accountContext": "Account workspace · Query repositories directly",
+  "latestMessages": "Latest messages",
+  "copyMessage": "Copy message",
+  "messageCopied": "Message copied",
+  "mobileInputHint": "Type a message…",
+  "draftHint": "Draft your next message…"
 }

@@ -121,5 +121,13 @@
   "preparingRequest": "正在準備請求…",
   "requestingResponse": "正在等待 AI 回覆…",
   "executingTool": "正在執行 GitHub 工具…",
-  "awaitingConfirmation": "等待你確認操作…"
+  "awaitingConfirmation": "等待你確認操作…",
+  "searchHistory": "搜尋對話或倉庫",
+  "deleteChatWarning": "刪除此對話與本機訊息？此操作無法復原。",
+  "accountContext": "帳號工作台 · 可直接查詢倉庫",
+  "latestMessages": "回到最新訊息",
+  "copyMessage": "複製訊息",
+  "messageCopied": "訊息已複製",
+  "mobileInputHint": "輸入訊息…",
+  "draftHint": "可先輸入下一則草稿…"
 }

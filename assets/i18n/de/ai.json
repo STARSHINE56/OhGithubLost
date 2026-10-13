@@ -121,5 +121,13 @@
   "preparingRequest": "Anfrage wird vorbereitet…",
   "requestingResponse": "Warten auf die KI-Antwort…",
   "executingTool": "GitHub-Werkzeug wird ausgeführt…",
-  "awaitingConfirmation": "Warten auf Ihre Bestätigung…"
+  "awaitingConfirmation": "Warten auf Ihre Bestätigung…",
+  "searchHistory": "Chats oder Repositories suchen",
+  "deleteChatWarning": "Diesen Chat und lokale Nachrichten unwiderruflich löschen?",
+  "accountContext": "Kontobereich · Repositories direkt abfragen",
+  "latestMessages": "Neueste Nachrichten",
+  "copyMessage": "Nachricht kopieren",
+  "messageCopied": "Nachricht kopiert",
+  "mobileInputHint": "Nachricht eingeben…",
+  "draftHint": "Nächste Nachricht entwerfen…"
 }

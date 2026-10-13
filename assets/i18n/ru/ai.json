@@ -121,5 +121,13 @@
   "preparingRequest": "Подготовка запроса…",
   "requestingResponse": "Ожидание ответа ИИ…",
   "executingTool": "Выполнение инструмента GitHub…",
-  "awaitingConfirmation": "Ожидание вашего подтверждения…"
+  "awaitingConfirmation": "Ожидание вашего подтверждения…",
+  "searchHistory": "Поиск чатов или репозиториев",
+  "deleteChatWarning": "Удалить этот чат и локальные сообщения? Действие необратимо.",
+  "accountContext": "Рабочая область аккаунта · Просмотр репозиториев",
+  "latestMessages": "Последние сообщения",
+  "copyMessage": "Копировать сообщение",
+  "messageCopied": "Сообщение скопировано",
+  "mobileInputHint": "Введите сообщение…",
+  "draftHint": "Черновик следующего сообщения…"
 }

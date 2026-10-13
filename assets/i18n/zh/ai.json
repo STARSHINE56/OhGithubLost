@@ -121,5 +121,13 @@
   "preparingRequest": "正在准备请求…",
   "requestingResponse": "正在等待 AI 回复…",
   "executingTool": "正在执行 GitHub 工具…",
-  "awaitingConfirmation": "等待你确认操作…"
+  "awaitingConfirmation": "等待你确认操作…",
+  "searchHistory": "搜索会话或仓库",
+  "deleteChatWarning": "删除这条会话及本地消息？此操作不可撤销。",
+  "accountContext": "账号工作台 · 可直接查询仓库",
+  "latestMessages": "回到最新消息",
+  "copyMessage": "复制消息",
+  "messageCopied": "消息已复制",
+  "mobileInputHint": "输入消息…",
+  "draftHint": "可提前输入下一条草稿…"
 }

@@ -38,6 +38,9 @@ class _AiChatPageState extends State<AiChatPage> {
   AiMessage? _pendingMessage;
   String _sendStatus = 'preparingRequest';
   int _loadGeneration = 0;
+  bool _followLatest = true;
+  String _historyFilter = '';
+  final _historySearch = TextEditingController();
 
   List<AiMessage> get _visibleMessages => [
     ...?_chat?.messages,
@@ -47,6 +50,8 @@ class _AiChatPageState extends State<AiChatPage> {
   @override
   void initState() {
     super.initState();
+    _scroll.addListener(_trackScroll);
+    _input.addListener(_inputChanged);
     _load();
     widget.surface.aiBuildChanges.addListener(_reload);
     widget.surface.domain.auth.addListener(_accountChanged);
@@ -62,7 +67,10 @@ class _AiChatPageState extends State<AiChatPage> {
   void dispose() {
     widget.surface.aiBuildChanges.removeListener(_reload);
     widget.surface.domain.auth.removeListener(_accountChanged);
+    _input.removeListener(_inputChanged);
     _input.dispose();
+    _historySearch.dispose();
+    _scroll.removeListener(_trackScroll);
     _scroll.dispose();
     super.dispose();
   }
@@ -114,8 +122,16 @@ class _AiChatPageState extends State<AiChatPage> {
     }
   }
 
-  void _bottom() => WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (mounted && _scroll.hasClients) {
+  void _inputChanged() { if (mounted) setState(() {}); }
+
+  void _trackScroll() {
+    if (!_scroll.hasClients) return;
+    final follow = _scroll.position.extentAfter < 100;
+    if (follow != _followLatest && mounted) setState(() => _followLatest = follow);
+  }
+
+  void _bottom({bool force = false}) => WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (mounted && _scroll.hasClients && (force || _followLatest)) {
       _scroll.jumpTo(_scroll.position.maxScrollExtent);
     }
   });
@@ -134,7 +150,8 @@ class _AiChatPageState extends State<AiChatPage> {
       _pendingMessage = AiMessage('user', text);
       _sendStatus = 'preparingRequest';
     });
-    _bottom();
+    _followLatest = true;
+    _bottom(force: true);
     try {
       final request = widget.surface.aiSend(
         chat,
@@ -164,7 +181,7 @@ class _AiChatPageState extends State<AiChatPage> {
       if (mounted) {
         setState(() {
           _error = aiError(e);
-          _input.text = text;
+          if (_input.text.trim().isEmpty) _input.text = text;
         });
       }
     } finally {
@@ -271,6 +288,9 @@ class _AiChatPageState extends State<AiChatPage> {
   @override
   Widget build(BuildContext context) {
     final visibleMessages = _visibleMessages;
+    final history = _history.where((chat) =>
+      ('${chat.repo} ${chat.messages.isEmpty ? '' : chat.messages.first.content}')
+        .toLowerCase().contains(_historyFilter.toLowerCase())).toList();
     return Scaffold(
     resizeToAvoidBottomInset: true,
     appBar: AppBar(
@@ -283,7 +303,7 @@ class _AiChatPageState extends State<AiChatPage> {
         ),
         IconButton(
           tooltip: aiText('audit'),
-          icon: const Icon(Icons.history),
+          icon: const Icon(Icons.receipt_long_outlined),
           onPressed: _sending ? null : _logs,
         ),
         IconButton(
@@ -302,12 +322,18 @@ class _AiChatPageState extends State<AiChatPage> {
       child: SafeArea(
         child: Column(
           children: [
-            ListTile(title: Text(aiText('history'))),
+            ListTile(leading: const Icon(Icons.history), title: Text(aiText('history'))),
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: TextField(controller: _historySearch,
+                decoration: InputDecoration(hintText: aiText('searchHistory'),
+                  prefixIcon: const Icon(Icons.search), border: const OutlineInputBorder()),
+                onChanged: (text) => setState(() => _historyFilter = text))),
+            const SizedBox(height: 12),
             Expanded(
               child: ListView.builder(
-                itemCount: _history.length,
+                itemCount: history.length,
                 itemBuilder: (_, index) {
-                  final chat = _history[index];
+                  final chat = history[index];
                   return ListTile(
                     selected: chat.id == _chat?.id,
                     title: Text(
@@ -336,6 +362,14 @@ class _AiChatPageState extends State<AiChatPage> {
                       onPressed: _sending
                           ? null
                           : () async {
+                              final accepted = await showDialog<bool>(context: context,
+                                builder: (dialog) => AlertDialog(title: Text(aiText('deleteChat')),
+                                  content: Text(aiText('deleteChatWarning')),
+                                  actions: [TextButton(onPressed: () => Navigator.pop(dialog, false),
+                                    child: Text(aiText('cancel'))),
+                                    FilledButton(onPressed: () => Navigator.pop(dialog, true),
+                                      child: Text(aiText('deleteChat')))]));
+                              if (accepted != true || !context.mounted) return;
                               await widget.surface.aiDeleteChat(chat.id);
                               if (context.mounted) {
                                 Navigator.pop(context);
@@ -355,7 +389,7 @@ class _AiChatPageState extends State<AiChatPage> {
       child: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1000),
+          constraints: const BoxConstraints(maxWidth: 920),
           child: Column(
             children: [
               Container(
@@ -365,11 +399,13 @@ class _AiChatPageState extends State<AiChatPage> {
                   vertical: 10,
                 ),
                 color: Theme.of(context).colorScheme.surfaceContainer,
-                child: Text(
-                  _chat?.repo.isNotEmpty == true
-                      ? '${_chat!.repo} · ${_chat!.branch}'
-                      : aiText('contextHint'),
-                ),
+                child: Row(children: [const Icon(Icons.folder_outlined, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(_chat?.repo.isNotEmpty == true
+                    ? '${_chat!.repo} · ${_chat!.branch}' : aiText('accountContext'),
+                    maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  if (_sending) const Icon(Icons.lock_outline, size: 16),
+                ]),
               ),
               Expanded(
                 child: _loading
@@ -395,7 +431,11 @@ class _AiChatPageState extends State<AiChatPage> {
                             alignment: user
                                 ? Alignment.centerRight
                                 : Alignment.centerLeft,
-                            child: Card(
+                            child: Container(
+                              constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width.clamp(280, 760) * (user ? .80 : .94)),
+                              child: Card(
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                               color: user
                                   ? Theme.of(context)
                                         .colorScheme
@@ -407,12 +447,19 @@ class _AiChatPageState extends State<AiChatPage> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      aiText(user ? 'you' : 'title'),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelMedium,
-                                    ),
+                                    Row(mainAxisSize: MainAxisSize.min, children: [
+                                      Icon(user ? Icons.person_outline : Icons.auto_awesome_outlined, size: 16),
+                                      const SizedBox(width: 8),
+                                      Text(aiText(user ? 'you' : 'title'), style: Theme.of(context).textTheme.labelMedium),
+                                      const SizedBox(width: 12),
+                                      IconButton(tooltip: aiText('copyMessage'), visualDensity: VisualDensity.compact,
+                                        icon: const Icon(Icons.copy_outlined, size: 16),
+                                        onPressed: () async {
+                                          await Clipboard.setData(ClipboardData(text: message.notice ? aiText(message.content) : message.content));
+                                          if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text(aiText('messageCopied'))));
+                                        }),
+                                    ]),
                                     const SizedBox(height: 8),
                                     MarkdownBody(
                                       data: message.notice
@@ -442,10 +489,15 @@ class _AiChatPageState extends State<AiChatPage> {
                                 ),
                               ),
                             ),
+                            ),
                           );
                         },
                       ),
               ),
+              if (!_followLatest && visibleMessages.isNotEmpty)
+                Padding(padding: const EdgeInsets.only(bottom: 8),
+                  child: FilledButton.tonalIcon(onPressed: () => _bottom(force: true),
+                    icon: const Icon(Icons.arrow_downward, size: 18), label: Text(aiText('latestMessages')))),
               if (_sending)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -496,17 +548,19 @@ class _AiChatPageState extends State<AiChatPage> {
                           minLines: 1,
                           maxLines: 6,
                           decoration: InputDecoration(
-                            hintText: aiText('inputHint'),
-                            border: const OutlineInputBorder(),
+                            hintText: aiText(widget.surface.isDesktop ? 'inputHint' : (_sending ? 'draftHint' : 'mobileInputHint')),
+                            filled: true,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                           ),
-                          enabled: !_loading && !_sending,
+                          enabled: !_loading,
                         ),
                       ),
                     ),
                     const SizedBox(width: 8),
                     IconButton.filled(
                       tooltip: aiText('send'),
-                      onPressed: _sending ? null : _send,
+                      onPressed: _sending || _loading || _chat == null || _input.text.trim().isEmpty ? null : _send,
                       icon: const Icon(Icons.arrow_upward),
                     ),
                   ],

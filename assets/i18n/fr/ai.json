@@ -121,5 +121,13 @@
   "preparingRequest": "Préparation de la requête…",
   "requestingResponse": "En attente de la réponse IA…",
   "executingTool": "Exécution de l’outil GitHub…",
-  "awaitingConfirmation": "En attente de votre confirmation…"
+  "awaitingConfirmation": "En attente de votre confirmation…",
+  "searchHistory": "Rechercher une conversation ou un dépôt",
+  "deleteChatWarning": "Supprimer cette conversation et ses messages locaux ? Cette action est irréversible.",
+  "accountContext": "Espace du compte · Consulter les dépôts",
+  "latestMessages": "Derniers messages",
+  "copyMessage": "Copier le message",
+  "messageCopied": "Message copié",
+  "mobileInputHint": "Écrire un message…",
+  "draftHint": "Préparer le prochain message…"
 }
