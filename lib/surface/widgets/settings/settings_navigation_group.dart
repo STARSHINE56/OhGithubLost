@@ -45,8 +45,9 @@ class OgLSettingsNavigationRow extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => ConstrainedBox(
-    constraints: const BoxConstraints(minHeight: 64),
+  Widget build(BuildContext context) => SizedBox(
+    // 所有入口同高；按系统字体缩放统一增高，而不是由标题长短决定。
+    height: 64 + (MediaQuery.textScalerOf(context).scale(16) - 16).clamp(0, double.infinity) * 3,
     child: ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       minLeadingWidth: 28,
