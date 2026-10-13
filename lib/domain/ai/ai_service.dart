@@ -443,8 +443,10 @@ Use workflow inputs only if specified by the user; list workflow YAML to inspect
               for (final key in ['id', 'full_name', 'description', 'private', 'default_branch', 'permissions'])
                 if (repo.containsKey(key)) key: repo[key],
             }));
-            if (result.length < 100) return {'data': repos, 'complete': true,
-              'possibly_more': false, 'next_page': null};
+            if (result.length < 100) {
+              return {'data': repos, 'complete': true,
+                'possibly_more': false, 'next_page': null};
+            }
           }
           return {'data': repos, 'complete': false, 'possibly_more': true,
             'next_page': start + 10};
